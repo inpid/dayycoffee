@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>중문로스터리 | 서귀포 중문 스페셜티 로스터리 카페</title>
+<meta name="description" content="제주 서귀포시 중문, 시그니처 말차 블렌드 커피를 직접 로스팅하는 카페 중문로스터리.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Noto+Serif+KR:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css">
+<style>
+:root {
+  --bg: #fbf6ea;
+  --bg-alt: #f3ecd8;
+  --surface: #ffffff;
+  --text: #2a2118;
+  --text-muted: #7a6f5e;
+  --border: #e7dcc0;
+  --matcha: #7c9a44;
+  --matcha-dark: #5f7a30;
+  --matcha-tint: #eef2e2;
+  --espresso: #4a3324;
+  --terracotta: #c1622d;
+  --shadow: 0 2px 10px rgba(42, 33, 24, 0.07);
+  --radius: 4px;
+  --max-width: 1120px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: "Noto Sans KR", "Malgun Gothic", sans-serif; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, h4 { font-family: "Noto Serif KR", serif; font-weight: 700; letter-spacing: -0.01em; margin: 0 0 0.5em; }
+a { color: inherit; text-decoration: none; }
+img { max-width: 100%; display: block; }
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+.section { padding: 88px 0; }
+.section-alt { background: var(--bg-alt); }
+.section-head { text-align: center; margin-bottom: 44px; }
+.section-head .eyebrow { display: inline-block; font-size: 12px; letter-spacing: 0.2em; color: var(--matcha-dark); text-transform: uppercase; margin-bottom: 10px; font-weight: 700; }
+.section-head h2 { font-size: 30px; }
+.section-head p { color: var(--text-muted); margin-top: 8px; }
+
+.btn { display: inline-block; padding: 13px 28px; border-radius: var(--radius); border: 1px solid var(--matcha-dark); background: var(--matcha-dark); color: #fff; font-size: 14px; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; transition: opacity .15s; }
+.btn:hover { opacity: 0.88; }
+.btn-outline { background: transparent; color: #fff; border-color: #fff; }
+
+/* Logo */
+.logo-word { font-family: "Noto Serif KR", serif; font-weight: 800; font-size: 22px; color: var(--text); line-height: 1.2; }
+.logo-sub { font-family: "Noto Sans KR", sans-serif; font-weight: 600; font-size: 8.5px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--matcha-dark); margin-top: 3px; }
+.logo-lockup { display: inline-flex; flex-direction: column; }
+.logo-lockup.on-dark .logo-word, .logo-lockup.on-dark .logo-sub { color: #fff; }
+.logo-lockup.on-dark .logo-sub { color: #dbe6c8; }
+.logo-lockup.center { align-items: center; text-align: center; }
+.logo-lockup.lg .logo-word { font-size: 46px; }
+.logo-lockup.lg .logo-sub { font-size: 13px; letter-spacing: 0.3em; margin-top: 10px; }
+
+/* Navbar */
+.navbar { position: sticky; top: 0; z-index: 100; background: rgba(251, 246, 234, 0.94); backdrop-filter: blur(6px); border-bottom: 1px solid var(--border); }
+.navbar-inner { max-width: var(--max-width); margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.nav-links { display: flex; gap: 26px; list-style: none; margin: 0; padding: 0; font-size: 14.5px; font-weight: 500; }
+.nav-links a { position: relative; padding: 4px 0; }
+.nav-links a::after { content: ''; position: absolute; left: 0; right: 0; bottom: -3px; height: 1px; background: var(--matcha-dark); transform: scaleX(0); transition: transform .18s; }
+.nav-links a:hover::after { transform: scaleX(1); }
+.nav-toggle { display: none; background: none; border: none; font-size: 22px; cursor: pointer; }
+@media (max-width: 780px) {
+  .nav-links { display: none; }
+  .nav-toggle { display: block; }
+  .navbar-inner.open .nav-links { display: flex; flex-direction: column; position: absolute; top: 100%; left: 0; right: 0; background: var(--bg); padding: 20px 24px; border-bottom: 1px solid var(--border); }
+}
+
+/* Hero */
+.hero { position: relative; min-height: 82vh; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; background: linear-gradient(160deg, #6f8f3c, #4a6027 65%, #38481d); overflow: hidden; padding: 60px 24px; }
+.hero .badge-pill { display: inline-block; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); padding: 6px 16px; border-radius: 20px; font-size: 12.5px; letter-spacing: 0.05em; margin-bottom: 22px; }
+.hero p { font-size: 17px; color: #eef3e4; max-width: 560px; margin: 0 auto 30px; }
+.hero .btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* Grid / cards */
+.grid { display: grid; gap: 24px; }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 860px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+.card-img { aspect-ratio: 4/3; width: 100%; background: linear-gradient(135deg, var(--matcha-tint), var(--bg-alt)); display: flex; align-items: center; justify-content: center; color: var(--matcha-dark); font-size: 13px; letter-spacing: 0.08em; text-align: center; padding: 10px; }
+.card-body { padding: 18px; }
+.card-body h3 { font-size: 17px; margin-bottom: 6px; }
+.card-body .price { color: var(--matcha-dark); font-weight: 700; font-size: 15px; }
+.card-body p { color: var(--text-muted); font-size: 13.5px; }
+.badge { display: inline-block; font-size: 11px; padding: 3px 9px; border-radius: 20px; background: var(--matcha-dark); color: #fff; margin-bottom: 8px; }
+.badge.terracotta { background: var(--terracotta); }
+
+/* Signature product */
+.signature-block { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+@media (max-width: 780px) { .signature-block { grid-template-columns: 1fr; } }
+.signature-visual { background: linear-gradient(150deg, #b9cf8c, var(--matcha) 55%, var(--espresso)); min-height: 320px; display: flex; align-items: center; justify-content: center; color: #fff; font-family: "Noto Serif KR", serif; font-size: 22px; font-weight: 700; text-align: center; padding: 30px; }
+.signature-copy { padding: 40px 44px 40px 0; }
+@media (max-width: 780px) { .signature-copy { padding: 0 28px 36px; } }
+.signature-copy .eyebrow { color: var(--matcha-dark); font-weight: 700; font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; }
+.signature-copy h3 { font-size: 26px; margin-top: 10px; }
+.tasting-notes { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 20px; }
+.tasting-notes span { background: var(--matcha-tint); color: var(--matcha-dark); font-size: 12.5px; padding: 5px 12px; border-radius: 20px; font-weight: 600; }
+
+/* Unique factors */
+.unique-card { padding: 26px; }
+.unique-card .icon { font-size: 26px; margin-bottom: 12px; display: block; }
+.unique-card h3 { font-size: 16.5px; }
+.unique-card p { color: var(--text-muted); font-size: 13.5px; }
+
+/* Location */
+.location-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+@media (max-width: 900px) { .location-grid { grid-template-columns: 1fr; } }
+.location-card { padding: 28px; }
+.location-card h3 { font-size: 16px; margin-bottom: 4px; }
+.location-card h3:not(:first-child) { margin-top: 20px; }
+.location-card p { color: var(--text-muted); font-size: 14.5px; }
+#map { width: 100%; height: 420px; border-radius: var(--radius); border: 1px solid var(--border); }
+.route-summary { display: flex; gap: 18px; margin-top: 14px; font-size: 13.5px; flex-wrap: wrap; }
+.route-summary .chip { background: var(--matcha-tint); color: var(--matcha-dark); padding: 8px 14px; border-radius: 8px; font-weight: 600; }
+.route-steps { margin-top: 16px; font-size: 13.5px; color: var(--text-muted); background: var(--bg-alt); border-radius: 8px; padding: 14px 16px; }
+.route-steps b { color: var(--text); }
+.map-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.leaflet-routing-container { display: none; }
+
+/* Footer */
+footer { background: var(--espresso); color: #d8cdb9; padding: 52px 0 28px; font-size: 13.5px; }
+footer .footer-logo { margin-bottom: 28px; }
+footer .footer-grid { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 24px; }
+footer h4 { color: #fff; font-size: 15px; }
+footer a:hover { color: #fff; }
+footer .footer-bottom { border-top: 1px solid rgba(255,255,255,0.12); padding-top: 18px; color: #a89a80; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<nav class="navbar">
+  <div class="navbar-inner" id="navbarInner">
+    <a href="#top" class="logo-lockup">
+      <span class="logo-word">중문로스터리</span>
+      <span class="logo-sub">Jungmun Roastery</span>
+    </a>
+    <ul class="nav-links">
+      <li><a href="#about">소개</a></li>
+      <li><a href="#signature">시그니처</a></li>
+      <li><a href="#menu">메뉴</a></li>
+      <li><a href="#unique">특별함</a></li>
+      <li><a href="#location">오시는 길</a></li>
+    </ul>
+    <button class="nav-toggle" id="navToggle" aria-label="메뉴 열기">☰</button>
+  </div>
+</nav>
+
+<section class="hero" id="top">
+  <div>
+    <span class="badge-pill">제주 서귀포 · 중문</span>
+    <div class="logo-lockup on-dark center lg" style="margin-bottom:20px;">
+      <span class="logo-word">중문로스터리</span>
+      <span class="logo-sub">Jungmun Roastery</span>
+    </div>
+    <p>제주에서 직접 로스팅한 원두와, 이곳에서만 만날 수 있는 시그니처 말차 블렌드. 중문 편의점 골목 안, 작지만 진심을 담은 로스터리 카페입니다.</p>
+    <div class="btns">
+      <a href="#signature" class="btn" style="background:#fff;border-color:#fff;color:var(--matcha-dark);">시그니처 블렌드 보기</a>
+      <a href="#location" class="btn btn-outline">오시는 길</a>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="about">
+  <div class="container" style="max-width:760px;">
+    <div class="section-head">
+      <span class="eyebrow">About</span>
+      <h2>중문로스터리 이야기</h2>
+    </div>
+    <p style="font-size:16px;">
+      중문로스터리는 제주 서귀포시 중문의 작은 로스터리 카페입니다. 생두를 직접 골라 매장에서 소량씩 로스팅하고,
+      그날그날 갓 볶은 원두로 커피를 내립니다.
+    </p>
+    <p style="font-size:16px;">
+      대표 메뉴는 카페 주인이 직접 개발한 <strong>시그니처 말차 블렌드</strong>입니다. 커피 본연의 로스팅 향에
+      말차의 은은한 풍미를 더해, 다른 곳에서는 맛볼 수 없는 중문로스터리만의 한 잔을 완성했습니다.
+    </p>
+  </div>
+</section>
+
+<section class="section section-alt" id="signature">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Signature</span>
+      <h2>시그니처 말차 블렌드</h2>
+      <p>중문로스터리에서만 만날 수 있는, 직접 개발한 오리지널 블렌딩입니다.</p>
+    </div>
+    <div class="signature-block">
+      <div class="signature-visual">말차 블렌드<br>MATCHA BLEND</div>
+      <div class="signature-copy">
+        <span class="eyebrow">Original Blending</span>
+        <h3>말차맛 커피 블렌드</h3>
+        <p style="color:var(--text-muted);">
+          고소한 다크 로스팅 원두에 말차 특유의 풋풋하고 은은한 향을 입힌 중문로스터리만의 오리지널 블렌딩입니다.
+          커피 본연의 바디감은 살리면서, 끝맛에 말차의 향긋함이 남는 것이 특징입니다.
+        </p>
+        <div class="tasting-notes">
+          <span>#말차향</span>
+          <span>#다크로스트</span>
+          <span>#고소함</span>
+          <span>#은은한단맛</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;color:var(--text-muted);">HOT / ICED 선택 가능</span>
+          <span class="card-body price" style="font-size:17px;font-weight:700;color:var(--matcha-dark);">6,500원</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="menu">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Menu</span>
+      <h2>메뉴</h2>
+      <p>시그니처 블렌드와 함께 즐기는 기본 메뉴입니다.</p>
+    </div>
+    <div class="grid grid-4">
+      <div class="card">
+        <div class="card-img">말차 블렌드</div>
+        <div class="card-body"><span class="badge terracotta">Signature</span><h3>말차 블렌드 커피</h3><p>중문로스터리 오리지널 블렌딩</p><span class="price">6,500원</span></div>
+      </div>
+      <div class="card">
+        <div class="card-img">아메리카노</div>
+        <div class="card-body"><h3>아메리카노</h3><p>매장에서 직접 로스팅한 원두</p><span class="price">4,500원</span></div>
+      </div>
+      <div class="card">
+        <div class="card-img">카페 라떼</div>
+        <div class="card-body"><h3>카페 라떼</h3><p>고소한 에스프레소와 부드러운 우유</p><span class="price">5,000원</span></div>
+      </div>
+      <div class="card">
+        <div class="card-img">감귤 에이드</div>
+        <div class="card-body"><h3>제주 감귤 에이드</h3><p>제주산 감귤로 만든 상큼한 에이드</p><span class="price">6,000원</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section section-alt" id="unique">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Only Jungmun Roastery</span>
+      <h2>우리만의 특별함</h2>
+      <p>중문로스터리가 다른 카페와 다른 이유입니다.</p>
+    </div>
+    <div class="grid grid-4">
+      <div class="card unique-card">
+        <span class="icon">🍵</span>
+        <h3>오리지널 말차 블렌드</h3>
+        <p>어디에도 없는, 직접 개발한 시그니처 레시피. 이 맛을 보려면 중문로스터리에 와야 합니다.</p>
+      </div>
+      <div class="card unique-card">
+        <span class="icon">🔥</span>
+        <h3>매장 직접 로스팅</h3>
+        <p>생두 선별부터 로스팅까지 매장에서 직접. 로스팅 일정에 맞춰 원두를 소량씩 정기구독으로도 판매합니다.</p>
+      </div>
+      <div class="card unique-card">
+        <span class="icon">🍊</span>
+        <h3>제주 로컬 재료 페어링</h3>
+        <p>제주 감귤, 녹차 등 지역 재료를 활용한 디저트 &amp; 음료로 '제주에서만 먹을 수 있는' 경험을 더합니다.</p>
+      </div>
+      <div class="card unique-card">
+        <span class="icon">🎟️</span>
+        <h3>원데이 커핑 클래스</h3>
+        <p>블렌딩 비법을 살짝 공개하는 커핑 &amp; 홈로스팅 클래스로 단골과 여행객 모두를 위한 경험을 제공합니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="location">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">Location</span>
+      <h2>오시는 길</h2>
+      <p>제주국제공항에서 중문로스터리까지의 경로입니다.</p>
+    </div>
+    <div class="location-grid">
+      <div class="card location-card">
+        <h3>주소</h3>
+        <p>제주특별자치도 서귀포시 중문 (OO편의점 바로 옆)<br><span style="font-size:12.5px;">* 정확한 지번/도로명 주소로 교체해주세요</span></p>
+        <h3>영업시간</h3>
+        <p>매일 10:00 - 19:00<br>(라스트오더 18:30)</p>
+        <h3>제주공항에서 오시는 길</h3>
+        <p>
+          🚗 자동차: 평화로 또는 1100도로 경유, 공항에서 약 40km · 40~50분<br>
+          🚌 대중교통: 제주공항 → 공항리무진 600번 버스 → 중문관광단지 하차 → 도보 이동 (약 60~70분)
+        </p>
+        <div class="route-summary" id="routeSummary">
+          <span class="chip">경로 계산 중...</span>
+        </div>
+      </div>
+      <div>
+        <div id="map"></div>
+        <p class="map-note">지도를 클릭하면 스크롤로 확대/축소할 수 있습니다. * 지도의 카페 위치는 임시 좌표입니다. 실제 주소 확정 후 정확한 좌표로 교체해주세요. 경로는 실시간 도로 상황에 따라 달라질 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="logo-lockup on-dark footer-logo">
+      <span class="logo-word">중문로스터리</span>
+      <span class="logo-sub">Jungmun Roastery</span>
+    </div>
+    <div class="footer-grid">
+      <div>
+        <h4>중문로스터리</h4>
+        <p>제주 서귀포 중문, 직접 로스팅한 커피와<br>시그니처 말차 블렌드를 만나보세요.</p>
+      </div>
+      <div>
+        <h4>바로가기</h4>
+        <p><a href="#about">소개</a> · <a href="#signature">시그니처</a> · <a href="#menu">메뉴</a> · <a href="#location">오시는 길</a></p>
+      </div>
+    </div>
+    <div class="footer-bottom">&copy; <span id="year"></span> Jungmun Roastery. All rights reserved.</div>
+  </div>
+</footer>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  const toggle = document.getElementById('navToggle');
+  const inner = document.getElementById('navbarInner');
+  toggle.addEventListener('click', () => inner.classList.toggle('open'));
+  document.querySelectorAll('.nav-links a').forEach(a => a.addEventListener('click', () => inner.classList.remove('open')));
+
+  // ---- Leaflet map: 제주국제공항 → 중문로스터리 ----
+  const AIRPORT = [33.5066, 126.4930];   // 제주국제공항 (근사치)
+  const CAFE = [33.2504, 126.4130];      // 중문로스터리 (임시 좌표 - 실제 주소로 교체 필요)
+
+  const map = L.map('map', { scrollWheelZoom: false });
+  map.on('click', () => map.scrollWheelZoom.enable());
+  map.on('mouseout', () => map.scrollWheelZoom.disable());
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const airportIcon = L.divIcon({
+    className: '', html: '<div style="background:#c1622d;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">✈</div>',
+    iconSize: [28, 28], iconAnchor: [14, 14],
+  });
+  const cafeIcon = L.divIcon({
+    className: '', html: '<div style="background:#5f7a30;color:#fff;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);">☕</div>',
+    iconSize: [30, 30], iconAnchor: [15, 15],
+  });
+
+  L.marker(AIRPORT, { icon: airportIcon }).addTo(map).bindPopup('<b>제주국제공항</b>');
+  L.marker(CAFE, { icon: cafeIcon }).addTo(map).bindPopup('<b>중문로스터리</b><br>제주 서귀포시 중문 (임시 위치)');
+  map.fitBounds([AIRPORT, CAFE], { padding: [40, 40] });
+
+  const routeSummary = document.getElementById('routeSummary');
+
+  try {
+    const control = L.Routing.control({
+      waypoints: [L.latLng(AIRPORT), L.latLng(CAFE)],
+      routeWhileDragging: false,
+      draggableWaypoints: false,
+      addWaypoints: false,
+      show: false,
+      fitSelectedRoute: true,
+      lineOptions: { styles: [{ color: '#5f7a30', weight: 5, opacity: 0.85 }] },
+      createMarker: () => null, // 마커는 위에서 이미 직접 추가함
+    }).addTo(map);
+
+    control.on('routesfound', (e) => {
+      const r = e.routes[0];
+      const km = (r.summary.totalDistance / 1000).toFixed(1);
+      const mins = Math.round(r.summary.totalTime / 60);
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      const timeText = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+      routeSummary.innerHTML = `<span class="chip">🚗 약 ${km}km</span><span class="chip">⏱️ 약 ${timeText}</span>`;
+    });
+
+    control.on('routingerror', () => {
+      routeSummary.innerHTML = '<span class="chip">경로 계산 실패 — 지도의 두 지점을 참고해주세요</span>';
+      L.polyline([AIRPORT, CAFE], { color: '#5f7a30', weight: 3, dashArray: '6,8' }).addTo(map);
+    });
+  } catch (e) {
+    routeSummary.innerHTML = '<span class="chip">경로 계산 실패 — 지도의 두 지점을 참고해주세요</span>';
+    L.polyline([AIRPORT, CAFE], { color: '#5f7a30', weight: 3, dashArray: '6,8' }).addTo(map);
+  }
+</script>
+</body>
+</html>
