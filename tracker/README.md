@@ -7,7 +7,7 @@
 - `scrape.py` — 수집 + 이전 상태와 비교 + 알림
 - `web/index.html` — 대시보드 (폰/PC 브라우저)
 - `data/` — 수집 결과 (자동 갱신)
-- `.github/workflows/scrape.yml` — 3시간마다 자동 실행
+- `.github/workflows/scrape.yml` — 2시간마다 자동 실행
 
 ## 업체 추가하는 법
 1. `sources.json`의 `template` 항목을 복사해 `id`, `name`, `url`을 채우고 `enabled: true`.
@@ -26,3 +26,8 @@
 ## 주의
 - 업체 사이트 약관/robots.txt를 확인하고, 수집 주기는 너무 짧게 하지 마세요.
 - 네이버 스마트스토어 등 자바스크립트로 그려지는 사이트는 이 방식으로 안 읽힙니다 (별도 어댑터 필요).
+
+## 컴퓨터 바탕화면 아이콘 (Windows)
+1. 저장소를 PC에 받습니다: `git clone https://github.com/inpid/dayycoffee.git` (git 설치 필요)
+2. `tracker/desktop/make_desktop_icon.bat` 을 더블클릭 → 바탕화면에 "생두 트래커" 아이콘 생성
+3. 아이콘을 열 때마다 최신 데이터를 내려받고(`git pull`) 브라우저로 `greenbean.html`을 엽니다.
