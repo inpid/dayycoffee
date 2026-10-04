@@ -164,6 +164,14 @@ def notify(events):
         print("(알림 설정 없음 — 아래 내용이 발송될 예정)\n" + msg)
 
 
+def build_html(beans, events, status):
+    """데이터를 내장한 단일 파일 greenbean.html 생성 (서버 없이 더블클릭으로 열림)."""
+    tpl = (ROOT / "web" / "template.html").read_text("utf-8")
+    blob = json.dumps({"beans": beans, "events": events, "status": status}, ensure_ascii=False).replace("</", "<\\/")
+    head, rest = tpl.split("/*DATA*/", 1)
+    (ROOT / "greenbean.html").write_text(head + blob + rest.split("/*END*/", 1)[1], "utf-8")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sources", default=str(ROOT / "sources.json"))
@@ -194,6 +202,7 @@ def main():
     (DATA / "beans.json").write_text(json.dumps(beans, ensure_ascii=False, indent=1), "utf-8")
     (DATA / "events.json").write_text(json.dumps(events_log, ensure_ascii=False, indent=1), "utf-8")
     (DATA / "status.json").write_text(json.dumps({**out, "sources": status}, ensure_ascii=False, indent=1), "utf-8")
+    build_html(beans, events_log, {**out, "sources": status})
     print(f"이벤트 {len(new_events)}건")
     if new_events and not args.no_notify:
         notify(new_events)
