@@ -1,0 +1,31 @@
+name: 생두 수집
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"   # 3시간마다 (UTC 기준)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r tracker/requirements.txt
+      - name: 수집 및 알림
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python tracker/scrape.py
+      - name: 변경된 데이터 저장
+        run: |
+          git config user.name "bean-tracker"
+          git config user.email "bean-tracker@users.noreply.github.com"
+          git add tracker/data
+          git diff --cached --quiet || (git commit -m "데이터 갱신" && git push)

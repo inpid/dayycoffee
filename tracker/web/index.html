@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>생두 트래커</title>
+<style>
+:root{--bg:#faf6ee;--card:#fff;--tx:#2a2118;--mu:#7a6f5e;--bd:#e7dcc0;--ac:#5f7a30;--new:#c1622d;--red:#b3392f}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1814;--card:#262019;--tx:#f0e8da;--mu:#a89c88;--bd:#3a3128;--ac:#9bbd5a;--new:#e88a55;--red:#e0675c}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,"Noto Sans KR","Malgun Gothic",sans-serif}
+header{padding:16px;max-width:1100px;margin:auto}h1{margin:0;font-size:22px}.sub{color:var(--mu);font-size:13px}
+.wrap{max-width:1100px;margin:auto;padding:0 16px 40px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+input,select{padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font:inherit}
+input{flex:1;min-width:160px}
+.tabs{display:flex;gap:6px;margin:8px 0}.tab{padding:7px 14px;border:1px solid var(--bd);border-radius:20px;background:var(--card);cursor:pointer;color:var(--tx);font:inherit}
+.tab.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:6px;text-decoration:none;color:inherit}
+.card:hover{border-color:var(--ac)}.card.so{opacity:.55}
+.co{font-size:12px;color:var(--mu)}.nm{font-weight:600}.pr{font-size:17px;font-weight:700}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;color:#fff;margin-right:4px}
+.b-new{background:var(--new)}.b-so{background:var(--red)}.b-re{background:var(--ac)}.b-or{background:var(--mu)}
+.ev{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:block;text-decoration:none;color:inherit}
+.empty{color:var(--mu);padding:30px;text-align:center}
+.err{color:var(--red);font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>☕ 생두 트래커</h1><div class="sub" id="upd"></div><div class="err" id="err"></div></header>
+<div class="wrap">
+  <div class="tabs"><button class="tab on" data-t="list">전체 목록</button><button class="tab" data-t="feed">업데이트 피드</button></div>
+  <div class="bar" id="filters">
+    <input id="q" placeholder="검색 (예: 게이샤, 에티오피아, 내추럴)">
+    <select id="co"><option value="">전체 업체</option></select>
+    <select id="or"><option value="">전체 원산지</option></select>
+    <select id="st"><option value="">판매중만</option><option value="all">품절 포함</option><option value="new">신규(7일)</option></select>
+    <select id="so"><option value="new">최신순</option><option value="pa">가격 낮은순</option><option value="pd">가격 높은순</option></select>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+const $=s=>document.querySelector(s),LAB={new:"🆕 신규",restock:"🔄 재입고",soldout:"⛔ 품절",price_change:"💰 가격변동",removed:"🗑 판매종료"};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const won=n=>n?n.toLocaleString()+"원":"가격 문의";
+let beans=[],events=[],tab="list";
+const isNew=b=>!b.baseline&&Date.now()-new Date(b.first_seen)<7*864e5;
+async function load(){
+  const j=f=>fetch("../data/"+f+"?t="+Date.now()).then(r=>r.json());
+  const [b,e,s]=await Promise.all([j("beans.json"),j("events.json"),j("status.json")]);
+  beans=Object.values(b).filter(x=>x.status!=="removed");events=e;
+  $("#upd").textContent="마지막 갱신 "+s.updated.replace("T"," ").slice(0,16)+" · 상품 "+beans.length+"개";
+  const bad=Object.values(s.sources).filter(x=>!x.ok);
+  $("#err").textContent=bad.length?"⚠ 수집 실패: "+bad.map(x=>x.name).join(", "):"";
+  fill("#co",[...new Set(beans.map(x=>x.source_name))]);fill("#or",[...new Set(beans.map(x=>x.origin).filter(Boolean))].sort());
+  render();
+}
+function fill(sel,vals){vals.forEach(v=>$(sel).insertAdjacentHTML("beforeend",`<option>${esc(v)}</option>`))}
+function render(){
+  $("#filters").style.display=tab==="list"?"flex":"none";
+  if(tab==="feed"){
+    $("#out").innerHTML=events.filter(e=>e.type!=="removed").map(e=>`<a class="ev" href="${esc(e.url)}" target="_blank" rel="noopener"><span class="co">${esc(e.time.slice(0,16).replace("T"," "))} · ${esc(e.source_name)}</span><br><b>${LAB[e.type]}</b> ${esc(e.name)} · ${e.type==="price_change"?won(e.old_price)+" → ":""}${won(e.price)}</a>`).join("")||'<div class="empty">아직 변동 내역이 없어요. 수집이 한 번 더 돌면 여기에 쌓입니다.</div>';
+    return;
+  }
+  const q=$("#q").value.trim().toLowerCase(),co=$("#co").value,or=$("#or").value,st=$("#st").value,so=$("#so").value;
+  let l=beans.filter(b=>(!q||(b.name+b.source_name).toLowerCase().includes(q))&&(!co||b.source_name===co)&&(!or||b.origin===or)&&(st==="all"||b.status==="on_sale"||st==="new")&&(st!=="new"||isNew(b)));
+  l.sort((a,b)=>so==="pa"?(a.price||1e12)-(b.price||1e12):so==="pd"?(b.price||0)-(a.price||0):b.first_seen.localeCompare(a.first_seen));
+  $("#out").innerHTML=l.length?`<div class="grid">${l.map(b=>`<a class="card ${b.status==="soldout"?"so":""}" href="${esc(b.url)}" target="_blank" rel="noopener"><span class="co">${esc(b.source_name)}</span><span class="nm">${esc(b.name)}</span><span>${isNew(b)?'<span class="badge b-new">NEW</span>':""}${b.status==="soldout"?'<span class="badge b-so">품절</span>':""}${b.origin?`<span class="badge b-or">${esc(b.origin)}</span>`:""}</span><span class="pr">${won(b.price)}</span></a>`).join("")}</div>`:'<div class="empty">조건에 맞는 생두가 없어요.</div>';
+}
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on",x===t));tab=t.dataset.t;render()});
+["q","co","or","st","so"].forEach(i=>$("#"+i).addEventListener("input",render));
+load().catch(e=>$("#out").innerHTML='<div class="empty">데이터를 불러오지 못했어요: '+esc(e.message)+'<br>로컬에서는 <code>python3 -m http.server</code> 로 열어주세요.</div>');
+</script>
+</body>
+</html>

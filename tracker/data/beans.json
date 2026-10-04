@@ -1,0 +1,86 @@
+{
+ "demo|https://example.com/product/eth-guji": {
+  "name": "[에티오피아] 구지 우라가 G1 내추럴 15kg",
+  "url": "https://example.com/product/eth-guji",
+  "price": 225000,
+  "image": "https://example.com/img/1.jpg",
+  "soldout": false,
+  "origin": "에티오피아",
+  "source": "demo",
+  "source_name": "데모 생두상회 (예시 데이터)",
+  "first_seen": "2026-10-04T15:09:43+09:00",
+  "last_seen": "2026-10-04T15:09:43+09:00",
+  "baseline": true,
+  "status": "on_sale",
+  "price_history": [
+   [
+    "2026-10-04T15:09:43+09:00",
+    210000
+   ],
+   [
+    "2026-10-04T15:09:43+09:00",
+    225000
+   ]
+  ]
+ },
+ "demo|https://example.com/product/col-huila": {
+  "name": "[콜롬비아] 후일라 수프리모 19up 35kg",
+  "url": "https://example.com/product/col-huila",
+  "price": 385000,
+  "image": "https://example.com/img/2.jpg",
+  "soldout": false,
+  "origin": "콜롬비아",
+  "source": "demo",
+  "source_name": "데모 생두상회 (예시 데이터)",
+  "first_seen": "2026-10-04T15:09:43+09:00",
+  "last_seen": "2026-10-04T15:09:43+09:00",
+  "baseline": true,
+  "status": "soldout",
+  "price_history": [
+   [
+    "2026-10-04T15:09:43+09:00",
+    385000
+   ]
+  ]
+ },
+ "demo|https://example.com/product/bra-santos": {
+  "name": "[브라질] 산토스 NY2 FC 60kg",
+  "url": "https://example.com/product/bra-santos",
+  "price": 298000,
+  "image": "https://example.com/img/3.jpg",
+  "soldout": true,
+  "origin": "브라질",
+  "source": "demo",
+  "source_name": "데모 생두상회 (예시 데이터)",
+  "first_seen": "2026-10-04T15:09:43+09:00",
+  "last_seen": "2026-10-04T15:09:43+09:00",
+  "baseline": true,
+  "status": "on_sale",
+  "price_history": [
+   [
+    "2026-10-04T15:09:43+09:00",
+    298000
+   ]
+  ]
+ },
+ "demo|https://example.com/product/pan-gesha": {
+  "name": "[파나마] 보케테 게이샤 워시드 5kg (항공)",
+  "url": "https://example.com/product/pan-gesha",
+  "price": 1450000,
+  "image": "https://example.com/img/4.jpg",
+  "soldout": false,
+  "origin": "파나마",
+  "source": "demo",
+  "source_name": "데모 생두상회 (예시 데이터)",
+  "first_seen": "2026-10-04T15:09:43+09:00",
+  "last_seen": "2026-10-04T15:09:43+09:00",
+  "baseline": false,
+  "status": "on_sale",
+  "price_history": [
+   [
+    "2026-10-04T15:09:43+09:00",
+    1450000
+   ]
+  ]
+ }
+}

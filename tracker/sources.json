@@ -1,0 +1,30 @@
+{
+  "_설명": "수집할 생두 업체 목록. enabled=true인 것만 수집합니다. 새 업체는 아래 형식으로 추가하세요. selectors는 브라우저 개발자도구(F12)로 확인한 CSS 선택자입니다.",
+  "sources": [
+    {
+      "id": "demo",
+      "name": "데모 생두상회 (예시 데이터)",
+      "enabled": true,
+      "url": "fixtures/demo_v1.html",
+      "base_url": "https://example.com",
+      "preset": "cafe24"
+    },
+    {
+      "id": "template",
+      "name": "업체이름 (복사해서 사용)",
+      "enabled": false,
+      "url": "https://업체도메인/product/list.html?cate_no=24",
+      "page_param": "page",
+      "max_pages": 3,
+      "preset": "cafe24",
+      "selectors": {
+        "item": "ul.prdList > li",
+        "name": ".name a",
+        "price": ".price, .xans-record- .price",
+        "link": ".name a",
+        "image": "img",
+        "soldout": ".icon_soldout, img[alt*='품절']"
+      }
+    }
+  ]
+}
