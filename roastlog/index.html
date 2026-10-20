@@ -3,23 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1e1712">
+<meta name="theme-color" content="#0d0d0f">
 <title>DAYY 로스팅 로그</title>
 <style>
-:root {
-  --bg: #1e1712;
-  --panel: #2a211a;
-  --panel2: #342a21;
-  --line: #4a3c30;
-  --text: #f3e9da;
-  --muted: #a89782;
-  --accent: #e0a458;
-  --bt: #ef5a3c;
-  --et: #4aa3df;
-  --ror: #8bc34a;
-  --ok: #7cb342;
-  --danger: #e5484d;
+:root, :root[data-theme="black"] {
+  --bg: #0d0d0f; --panel: #17171a; --panel2: #222226; --line: #36363c;
+  --text: #f4f4f5; --muted: #9b9ba5; --accent: #ffc233; --onaccent: #111;
+  --bt: #ff5a47; --et: #4db2ff; --ror: #7ddc5a; --grid: #2a2a30; --ok: #6fd36b; --danger: #ff4d5a;
   --radius: 12px;
+}
+:root[data-theme="beige"] {
+  --bg: #f4efe4; --panel: #fbf8f1; --panel2: #ece6d8; --line: #d8d0bd;
+  --text: #25262a; --muted: #77766f; --accent: #2e7d6b; --onaccent: #fff;
+  --bt: #d8402a; --et: #2677b8; --ror: #4b8a1c; --grid: #e2dac8; --ok: #3a8a3a; --danger: #cf3340;
+}
+:root[data-theme="white"] {
+  --bg: #ffffff; --panel: #f5f6f8; --panel2: #eaecf0; --line: #d9dce3;
+  --text: #15171c; --muted: #6a7080; --accent: #2563eb; --onaccent: #fff;
+  --bt: #e03a24; --et: #1f78c8; --ror: #3f8f1f; --grid: #e6e8ed; --ok: #2f8f3a; --danger: #d92d3a;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--text); }
@@ -31,7 +32,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 10; }
 header .logo { font-weight: 800; font-size: 18px; letter-spacing: .5px; }
 header .logo b { color: var(--accent); }
-header .live-pill { margin-left: auto; background: var(--danger); color: #fff; font-size: 12px; padding: 3px 10px; border-radius: 99px; display: none; cursor: pointer; }
+header .live-pill { margin-left: 8px; background: var(--danger); color: #fff; font-size: 12px; padding: 3px 10px; border-radius: 99px; display: none; cursor: pointer; }
 header .live-pill.on { display: block; animation: pulse 1.5s infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
 main { max-width: 1000px; margin: 0 auto; padding: 16px; }
@@ -56,8 +57,11 @@ textarea { min-height: 70px; resize: vertical; }
 .field { margin-bottom: 10px; }
 .btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
 .btn:hover { border-color: var(--accent); }
-.btn.pri { background: var(--accent); color: #2a1a08; border-color: var(--accent); }
+.btn.pri { background: var(--accent); color: var(--onaccent); border-color: var(--accent); }
 .btn.dan { background: var(--danger); border-color: var(--danger); color: #fff; }
+.themes { margin-left: auto; display: flex; gap: 6px; }
+.themes button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line); cursor: pointer; padding: 0; }
+.themes button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
 .btn.sm { padding: 5px 10px; font-size: 13px; }
 .btn:disabled { opacity: .4; cursor: default; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -111,6 +115,7 @@ details summary { cursor: pointer; font-size: 13px; }
 <body>
 <header>
   <div class="logo">DAYY <b>ROAST</b> LOG</div>
+  <div class="themes" id="themes"></div>
   <div class="live-pill" id="livePill">● 로스팅 진행 중</div>
 </header>
 <main id="app"></main>
@@ -121,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1 } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, theme: '' } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
@@ -210,7 +215,17 @@ function greenRemainG(g) {
 }
 
 /* ============ 차트 ============ */
-const COLORS = ['#ef5a3c', '#4aa3df', '#8bc34a', '#e0a458', '#b97bd6'];
+const DEFAULT_THEME = 'black';
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let COLORS = [];
+const THEMES = [['beige', '#f4efe4', '베이지'], ['white', '#ffffff', '화이트'], ['black', '#0d0d0f', '블랙']];
+function applyTheme(n) {
+  if (!THEMES.some(t => t[0] === n)) n = DEFAULT_THEME;
+  document.documentElement.dataset.theme = n; S.settings.theme = n;
+  COLORS = [cssv('--bt'), cssv('--et'), cssv('--ror'), cssv('--accent'), '#a35fd0'];
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = cssv('--bg');
+  $('#themes').innerHTML = THEMES.map(t => `<button class="${t[0] === n ? 'on' : ''}" style="background:${t[1]}" title="${t[2]}" data-act="theme" data-v="${t[0]}"></button>`).join('');
+}
 function drawChart(cv, o) {
   const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   cv.width = W * dpr; cv.height = H * dpr;
@@ -231,7 +246,7 @@ function drawChart(cv, o) {
   c.clearRect(0, 0, W, H);
   c.font = '11px sans-serif'; c.lineWidth = 1;
   // 그리드
-  c.strokeStyle = '#3a2f26'; c.fillStyle = '#a89782';
+  c.strokeStyle = cssv('--grid'); c.fillStyle = cssv('--muted');
   c.textAlign = 'right';
   for (let v = Math.ceil(ymin / 20) * 20; v <= ymax; v += 20) {
     c.beginPath(); c.moveTo(pad.l, Y(v)); c.lineTo(W - pad.r, Y(v)); c.stroke();
@@ -242,13 +257,13 @@ function drawChart(cv, o) {
     c.beginPath(); c.moveTo(X(t), pad.t); c.lineTo(X(t), pad.t + ph); c.stroke();
     c.fillText(t / 60, X(t), H - 7);
   }
-  c.textAlign = 'left'; c.fillStyle = '#8bc34a';
+  c.textAlign = 'left'; c.fillStyle = cssv('--ror');
   for (let v = 0; v <= rmax; v += 5) c.fillText(v, W - pad.r + 4, R(v) + 4);
   // 이벤트 세로선
   (o.markers || []).forEach((m, mi) => {
-    c.strokeStyle = m.color || '#7a6a58'; c.setLineDash([3, 3]);
+    c.strokeStyle = m.color || cssv('--muted'); c.setLineDash([3, 3]);
     c.beginPath(); c.moveTo(X(m.x), pad.t); c.lineTo(X(m.x), pad.t + ph); c.stroke(); c.setLineDash([]);
-    c.fillStyle = m.color || '#d8c7ae'; c.textAlign = 'left';
+    c.fillStyle = m.color || cssv('--text'); c.textAlign = 'left';
     c.save(); c.translate(X(m.x) + 3, pad.t + 10 + (mi % 3) * 12); c.fillText(m.label, 0, 0); c.restore();
   });
   // 시리즈
@@ -260,8 +275,8 @@ function drawChart(cv, o) {
     c.stroke(); c.setLineDash([]);
     if (s.dots) { c.fillStyle = s.color; s.pts.forEach(p => { c.beginPath(); c.arc(X(p.x), s.axis === 'R' ? R(p.y) : Y(p.y), 2.5, 0, 7); c.fill(); }); }
   });
-  (o.ticks || []).forEach(x => { c.strokeStyle = '#e0a458'; c.beginPath(); c.moveTo(X(x), pad.t + ph); c.lineTo(X(x), pad.t + ph - 9); c.stroke(); });
-  if (o.now != null) { c.strokeStyle = '#fff6'; c.beginPath(); c.moveTo(X(o.now), pad.t); c.lineTo(X(o.now), pad.t + ph); c.stroke(); }
+  (o.ticks || []).forEach(x => { c.strokeStyle = cssv('--accent'); c.beginPath(); c.moveTo(X(x), pad.t + ph); c.lineTo(X(x), pad.t + ph - 9); c.stroke(); });
+  if (o.now != null) { c.strokeStyle = cssv('--muted'); c.beginPath(); c.moveTo(X(o.now), pad.t); c.lineTo(X(o.now), pad.t + ph); c.stroke(); }
   cv._geom = { pad, pw, xmax };
 }
 function attachReadout(cv, out, getSeries) { // 마우스/터치 위치의 값 표시
@@ -290,7 +305,7 @@ function seriesOf(r, opt = {}) {
 function markersOf(r) {
   const e = r.events || {}, mk = [];
   EVENTS.forEach(ev => { if (e[ev.k] != null) mk.push({ x: e[ev.k], label: ev.name }); });
-  if (e.drop != null) mk.push({ x: e.drop, label: '배출', color: '#e5484d' });
+  if (e.drop != null) mk.push({ x: e.drop, label: '배출', color: cssv('--danger') });
   return mk;
 }
 
@@ -784,11 +799,11 @@ function vDetail(el) {
       <div class="legend"><span><i style="background:var(--bt)"></i>BT</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--ror)"></i>RoR</span></div>
     </div>
     <div class="card"><h3>단계 구성</h3>
-      <div class="phase"><span style="width:${pct(m.dryPct)}%;background:#d9b84a"></span><span style="width:${pct(m.maiPct)}%;background:#c1622d"></span><span style="width:${pct(m.dtr)}%;background:#6b3a1e"></span></div>
+      <div class="phase"><span style="width:${pct(m.dryPct)}%;background:#e8b930"></span><span style="width:${pct(m.maiPct)}%;background:#ec7a3a"></span><span style="width:${pct(m.dtr)}%;background:#c43d4b"></span></div>
       <div class="grid g3" style="font-size:13px">
-        <div><span style="color:#d9b84a">■</span> 건조 ${fmtT(m.dry)} (${num(m.dryPct, 0)}%)</div>
-        <div><span style="color:#c1622d">■</span> 메일라드 ${fmtT(m.maillard)} (${num(m.maiPct, 0)}%)</div>
-        <div><span style="color:#8b4a26">■</span> 디벨롭 ${fmtT(m.dev)} (${num(m.dtr, 0)}%)</div></div>
+        <div><span style="color:#e8b930">■</span> 건조 ${fmtT(m.dry)} (${num(m.dryPct, 0)}%)</div>
+        <div><span style="color:#ec7a3a">■</span> 메일라드 ${fmtT(m.maillard)} (${num(m.maiPct, 0)}%)</div>
+        <div><span style="color:#c43d4b">■</span> 디벨롭 ${fmtT(m.dev)} (${num(m.dtr, 0)}%)</div></div>
     </div>
     <div class="grid g2">
       <div class="card"><h3>주요 지점</h3><table>
@@ -953,6 +968,7 @@ document.addEventListener('click', e => {
   const a = t.dataset.act, id = t.dataset.id;
   switch (a) {
     case 'go': go(t.dataset.v); break;
+    case 'theme': applyTheme(t.dataset.v); save(); render(); break;
     case 'detail': go('detail', id); break;
     case 'closeModal': closeModal(); break;
     case 'manual': manualModal(); break;
@@ -1011,7 +1027,7 @@ document.addEventListener('submit', e => {
     }
   }
 });
-window.addEventListener('resize', () => { if (view === 'roast' && S.live) return; });
+applyTheme(S.settings.theme || DEFAULT_THEME);
 render();
 </script>
 </body>
