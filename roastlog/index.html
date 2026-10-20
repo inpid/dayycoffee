@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#0d0d0f">
-<title>DAYY 로스팅 로그</title>
+<title>스탠다드로스트</title>
 <style>
 :root, :root[data-theme="black"] {
   --bg: #0d0d0f; --panel: #17171a; --panel2: #222226; --line: #36363c;
@@ -114,7 +114,7 @@ details summary { cursor: pointer; font-size: 13px; }
 </head>
 <body>
 <header>
-  <div class="logo">DAYY <b>ROAST</b> LOG</div>
+  <div class="logo">STANDARD <b>ROAST</b><span class="muted" style="font-size:12px;font-weight:500;margin-left:8px">스탠다드로스트</span></div>
   <div class="themes" id="themes"></div>
   <div class="live-pill" id="livePill">● 로스팅 진행 중</div>
 </header>
@@ -936,7 +936,7 @@ function exportCsv() {
     const m = metrics(r), g = S.greens.find(x => x.id === r.greenId);
     return [r.date, r.name, g ? g.name : '', r.batchG, r.roastedG, num(m.loss, 2), fmtT(m.total), fmtT(m.dry), fmtT(m.fc), fmtT(m.dev), num(m.dtr, 2), num(m.dropTemp), r.level, r.cup && r.cup.score, r.notes].map(q).join(',');
   });
-  download('roast-log.csv', '﻿' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
+  download('standardroast-log.csv', '﻿' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
 }
 function loadSample() {
   const g = { id: uid(), name: '에티오피아 예가체프 G1 (샘플)', origin: '에티오피아', process: '워시드', supplier: '샘플상사', kg: 20, price: 14500, date: today() };
@@ -999,7 +999,7 @@ document.addEventListener('click', e => {
       window.scrollTo(0, 0);
       break;
     }
-    case 'expJson': download('roastlog-backup-' + today() + '.json', JSON.stringify(S, null, 1), 'application/json'); break;
+    case 'expJson': download('standardroast-backup-' + today() + '.json', JSON.stringify(S, null, 1), 'application/json'); break;
     case 'expCsv': exportCsv(); break;
     case 'sample': loadSample(); break;
     case 'wipe': if (confirm('모든 기록과 생두 데이터를 삭제합니다. 계속할까요?') && confirm('정말 삭제할까요? 되돌릴 수 없습니다.')) { S = fresh(); save(); go('home'); } break;

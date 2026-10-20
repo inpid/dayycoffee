@@ -1,4 +1,4 @@
-// 온도 센서 → 노트북 USB 시리얼 (DAYY 로스팅 로그용)
+// 온도 센서 → 노트북 USB 시리얼 (STANDARD ROAST(스탠다드로스트)용)
 // 부품: Arduino Uno/Nano + MAX31855 열전대 모듈 2개 (K타입 프로브: BT 원두, ET 배기/드럼)
 // 라이브러리: Adafruit MAX31855 library
 // 출력 형식(한 줄, 4Hz): "BT=201.25,ET=232.50"  → 보레이트 115200
