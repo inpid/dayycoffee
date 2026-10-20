@@ -93,6 +93,12 @@ th { color: var(--muted); font-weight: 600; }
 .chk input { width: auto; }
 .chk i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .empty { text-align: center; color: var(--muted); padding: 28px 0; }
+.alerts { font-size: 13px; max-height: 180px; overflow-y: auto; }
+.alerts div { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.alerts b { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 5px; }
+.dot.on { background: var(--ok); }
+details summary { cursor: pointer; font-size: 13px; }
 @media print {
   header, nav, .noprint { display: none !important; }
   body { background: #fff; color: #000; padding: 0; }
@@ -115,9 +121,9 @@ th { color: var(--muted); font-weight: 600; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '' } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1 } });
 function load() {
-  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) return Object.assign(fresh(), d); } catch (e) {}
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
 }
 let S = load();
@@ -142,6 +148,7 @@ function toast(msg) {
   document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
 }
 const EVENTS = [
+  { k: 'tp', name: '터닝포인트', sub: '자동 감지' },
   { k: 'dry', name: '건조 종료', sub: '옐로잉' },
   { k: 'fc', name: '1차 크랙', sub: '시작' },
   { k: 'fce', name: '1차 크랙 종료', sub: '' },
@@ -165,8 +172,8 @@ function rorSeries(p, win = 30) { // [{t, v}] °C/분
     if (j < 0) continue;
     raw.push({ t: bt[i].t, v: (bt[i].bt - bt[j].bt) / (bt[i].t - bt[j].t) * 60 });
   }
-  return raw.map((x, i) => { // 3점 이동평균
-    const a = raw.slice(Math.max(0, i - 1), i + 2);
+  return raw.map(x => { // ±6초 이동평균
+    const a = raw.filter(y => Math.abs(y.t - x.t) <= 6);
     return { t: x.t, v: a.reduce((s, y) => s + y.v, 0) / a.length };
   });
 }
@@ -253,6 +260,7 @@ function drawChart(cv, o) {
     c.stroke(); c.setLineDash([]);
     if (s.dots) { c.fillStyle = s.color; s.pts.forEach(p => { c.beginPath(); c.arc(X(p.x), s.axis === 'R' ? R(p.y) : Y(p.y), 2.5, 0, 7); c.fill(); }); }
   });
+  (o.ticks || []).forEach(x => { c.strokeStyle = '#e0a458'; c.beginPath(); c.moveTo(X(x), pad.t + ph); c.lineTo(X(x), pad.t + ph - 9); c.stroke(); });
   if (o.now != null) { c.strokeStyle = '#fff6'; c.beginPath(); c.moveTo(X(o.now), pad.t); c.lineTo(X(o.now), pad.t + ph); c.stroke(); }
   cv._geom = { pad, pw, xmax };
 }
@@ -274,7 +282,7 @@ function attachReadout(cv, out, getSeries) { // 마우스/터치 위치의 값 �
 function seriesOf(r, opt = {}) {
   const p = ptsOf(r), col = opt.color || COLORS[0];
   const out = [];
-  out.push({ name: opt.label ? opt.label + ' BT' : 'BT', color: col, axis: 'T', width: 2.5, dots: true, pts: p.filter(x => x.bt != null).map(x => ({ x: x.t, y: +x.bt })) });
+  out.push({ name: opt.label ? opt.label + ' BT' : 'BT', color: col, axis: 'T', width: 2.5, dots: p.length < 120, pts: p.filter(x => x.bt != null).map(x => ({ x: x.t, y: +x.bt })) });
   if (opt.et !== false) out.push({ name: opt.label ? opt.label + ' ET' : 'ET', color: opt.etColor || COLORS[1], axis: 'T', dash: opt.dash, pts: p.filter(x => x.et != null && x.et !== '').map(x => ({ x: x.t, y: +x.et })) });
   if (opt.ror !== false) out.push({ name: opt.label ? opt.label + ' RoR' : 'RoR', color: opt.rorColor || COLORS[2], axis: 'R', dash: opt.dash || [], pts: rorSeries(p).map(x => ({ x: x.t, y: x.v })) });
   return out;
@@ -299,6 +307,170 @@ function render() {
   fn($('#app'));
 }
 $('#livePill').onclick = () => go('roast');
+
+/* ============ 장비 연결 (USB 시리얼 / 시뮬레이터 / 마이크) ============ */
+const DAQ = { mode: null, port: null, reader: null, bt: null, et: null, ts: 0, hist: [], simTimer: null, n: 0 };
+const daqFresh = () => !!DAQ.mode && Date.now() - DAQ.ts < 3000 && DAQ.bt != null;
+const liveHooks = {};
+
+function parseLine(line) { // "200.5,230.1" | "BT=200.5 ET=230.1" | "T1:200;T2:230" | {"bt":..,"et":..}
+  line = line.trim(); if (!line) return null;
+  let bt = null, et = null;
+  if (line[0] === '{') {
+    try { const j = JSON.parse(line); bt = j.bt ?? j.BT ?? j.t1 ?? j.T1; et = j.et ?? j.ET ?? j.t2 ?? j.T2; } catch (e) { return null; }
+  } else {
+    const kb = line.match(/(?:bt|t1|bean)\D{0,3}(-?\d+(?:\.\d+)?)/i), ke = line.match(/(?:et|t2|exh|drum)\D{0,3}(-?\d+(?:\.\d+)?)/i);
+    if (kb) bt = +kb[1]; if (ke) et = +ke[1];
+    if (bt == null) { const n = line.match(/-?\d+(?:\.\d+)?/g); if (!n) return null; bt = +n[0]; if (n[1] != null) et = +n[1]; }
+  }
+  if (typeof bt !== 'number' || isNaN(bt) || bt < -50 || bt > 450) return null;
+  if (typeof et !== 'number' || isNaN(et) || et < -50 || et > 450) et = null;
+  return { bt, et };
+}
+function serialLine(line) {
+  const p = parseLine(line); if (!p) return;
+  let { bt, et } = p; const st = S.settings;
+  if (st.swap && et != null) [bt, et] = [et, bt];
+  bt += +st.btOff || 0; if (et != null) et += +st.etOff || 0;
+  daqFeed(bt, et);
+}
+function daqFeed(bt, et) {
+  DAQ.bt = bt; DAQ.et = et; DAQ.ts = Date.now(); DAQ.n++;
+  DAQ.hist.push({ ts: DAQ.ts, bt, et });
+  while (DAQ.hist.length && DAQ.ts - DAQ.hist[0].ts > 60000) DAQ.hist.shift();
+  daqUI(); chargeWatch();
+}
+async function serialConnect() {
+  if (!('serial' in navigator)) return toast('Chrome 또는 Edge 브라우저(노트북)에서 사용하세요');
+  try {
+    await daqOff();
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: +S.settings.baud || 9600 });
+    DAQ.port = port; DAQ.mode = 'serial';
+    const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader(); DAQ.reader = reader;
+    toast('연결되었습니다'); daqUI();
+    let buf = '';
+    (async () => {
+      try { for (;;) { const { value, done } = await reader.read(); if (done) break; buf += value; let i; while ((i = buf.indexOf('\n')) >= 0) { serialLine(buf.slice(0, i)); buf = buf.slice(i + 1); } } } catch (e) {}
+      if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
+    })();
+  } catch (e) { if (e && e.name !== 'NotFoundError') toast('연결 실패: ' + (e.message || e)); }
+}
+async function daqOff() {
+  if (DAQ.simTimer) { clearInterval(DAQ.simTimer); DAQ.simTimer = null; }
+  const r = DAQ.reader, p = DAQ.port; DAQ.reader = null; DAQ.port = null; DAQ.mode = null;
+  try { if (r) await r.cancel(); } catch (e) {}
+  try { if (p) await p.close(); } catch (e) {}
+  DAQ.bt = DAQ.et = null; daqUI();
+}
+function simProfile(pt) { // 체험용: 1kg급 약 10분 라이트 로스트 곡선
+  let bt = 230 - 165 * Math.exp(-pt / 300) + 135 * Math.exp(-pt / 22) - 6 * Math.exp(-Math.pow((pt - 180) / 45, 2));
+  if (pt > 505) bt += 2.5 * (1 - Math.exp(-(pt - 505) / 12));
+  return { bt: bt + (Math.random() - .5) * .3, et: 240 - 30 * Math.exp(-pt / 250) + (Math.random() - .5) * .3 };
+}
+async function daqSim() {
+  await daqOff(); DAQ.mode = 'sim';
+  DAQ.simTimer = setInterval(() => {
+    if (!S.live) return daqFeed(200 + Math.sin(Date.now() / 3000) * .3, 232);
+    const pt = liveT() * (+S.settings.simSpeed || 1), v = simProfile(pt);
+    if (pt > 505 && pt < 565 && Math.random() < .5) crackHit();
+    daqFeed(v.bt, v.et);
+  }, 250);
+  toast('시뮬레이터 연결 (실제 장비 아님)');
+}
+function chargeWatch() { // 투입 자동 감지: BT가 8초 안에 10°C 이상 급락하면 타이머 시작
+  if (S.live || view !== 'roast') return;
+  const cb = $('#autoCharge'); if (!cb || !cb.checked) return;
+  const win = DAQ.hist.filter(x => DAQ.ts - x.ts <= 8000 && x.bt != null); if (win.length < 4) return;
+  const peak = Math.max(...win.map(x => x.bt));
+  if (peak >= 120 && peak - DAQ.bt >= 10) {
+    const pk = win.find(x => x.bt >= peak - 1), form = $('form[data-form=start]');
+    const f = Object.fromEntries(new FormData(form).entries());
+    f.name = f.name || today() + ' 로스팅'; if (f.chargeTemp === '') f.chargeTemp = peak.toFixed(1);
+    startRoast(f, pk.ts); toast('투입 감지 — 로스팅 시작');
+  }
+}
+function daqUI() {
+  const el = $('#daqRead'), st = $('#daqState'); if (!el) return;
+  const fresh = daqFresh();
+  el.innerHTML = fresh ? `<span style="color:var(--bt)">BT ${DAQ.bt.toFixed(1)}</span> &nbsp; <span style="color:var(--et)">ET ${DAQ.et != null ? DAQ.et.toFixed(1) : '-'}</span>` : '<span class="muted">신호 없음</span>';
+  st.innerHTML = `<span class="dot ${fresh ? 'on' : ''}"></span>${DAQ.mode === 'serial' ? 'USB 연결됨' : DAQ.mode === 'sim' ? '시뮬레이터' : '미연결'}`;
+}
+function daqPanel() {
+  const st = S.settings, sel = (k, vals) => `<select data-set="${k}">${vals.map(v => `<option ${+st[k] === v ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
+  return `<div class="card"><div class="row sp"><h3 style="margin:0">🔌 장비 연결</h3><span id="daqState" class="tag"></span></div>
+    <div class="big" id="daqRead" style="margin:10px 0"></div>
+    <div class="row"><button class="btn sm pri" data-act="daqSerial">USB 시리얼 연결</button><button class="btn sm" data-act="daqSim">시뮬레이터</button>
+      <button class="btn sm" data-act="daqOff">해제</button><button class="btn sm" data-act="micToggle">${MIC.on ? '🎤 크랙 감지 끄기' : '🎤 크랙 소리 감지'}</button></div>
+    <details style="margin-top:10px"><summary class="muted">연결 · 보정 설정</summary><div class="grid g2" style="margin-top:8px">
+      <div><label>보레이트</label>${sel('baud', [9600, 19200, 38400, 57600, 115200])}</div>
+      <div><label>크랙 감지 민감도 (낮을수록 민감)</label>${sel('micSens', [2, 3, 4, 6, 8])}</div>
+      <div><label>BT 보정 (°C)</label><input type="number" step="0.1" data-set="btOff" value="${st.btOff}"></div>
+      <div><label>ET 보정 (°C)</label><input type="number" step="0.1" data-set="etOff" value="${st.etOff}"></div>
+      <div><label>건조 종료 기준 BT (°C)</label><input type="number" step="1" data-set="dryTemp" value="${st.dryTemp}"></div>
+      <div><label>시뮬레이터 속도 (배)</label>${sel('simSpeed', [1, 2, 4, 8])}</div>
+      <label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="swap" ${st.swap ? 'checked' : ''}> BT/ET 채널 서로 바꾸기</label></div></details></div>`;
+}
+
+/* 마이크 크랙 감지: 고주파 순간 소리(2kHz↑)가 평소 소음의 N배를 넘으면 크랙 1회 */
+const MIC = { on: false, stream: null, ctx: null, timer: null, base: .005, last: 0 };
+async function micToggle() {
+  if (MIC.on) { clearInterval(MIC.timer); MIC.stream.getTracks().forEach(t => t.stop()); MIC.ctx.close(); MIC.on = false; return render(); }
+  try { MIC.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } }); }
+  catch (e) { return toast('마이크 권한이 필요합니다'); }
+  const ctx = MIC.ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2000;
+  const an = ctx.createAnalyser(); an.fftSize = 1024;
+  ctx.createMediaStreamSource(MIC.stream).connect(hp); hp.connect(an);
+  const buf = new Float32Array(an.fftSize); MIC.on = true;
+  MIC.timer = setInterval(() => {
+    an.getFloatTimeDomainData(buf); let pk = 0; for (const v of buf) { const a = Math.abs(v); if (a > pk) pk = a; }
+    if (pk > MIC.base * (+S.settings.micSens || 4) && pk > .02 && Date.now() - MIC.last > 150) { MIC.last = Date.now(); crackHit(); }
+    MIC.base = MIC.base * .98 + Math.min(pk, MIC.base * 3) * .02;
+  }, 25);
+  render();
+}
+function crackHit() { if (!S.live) return; (S.live.cracks = S.live.cracks || []).push(+liveT().toFixed(1)); }
+
+/* 실시간 분석: 터닝포인트 · 건조 종료 · 크랙 자동 표시 + RoR 이상 경고 */
+function addAlert(L, type, msg, cool = 40) {
+  const now = liveT(); L.det = L.det || {};
+  if (L.det['c_' + type] != null && now - L.det['c_' + type] < cool) return;
+  L.det['c_' + type] = now; L.alerts.push({ t: Math.round(now), type, msg });
+  toast(msg); beep(); if (liveHooks.alerts) liveHooks.alerts();
+}
+function autoMark(L, k, tt, msg) {
+  if (L.events[k] != null || (L.det && L.det.no && L.det.no[k])) return;
+  L.events[k] = Math.round(tt); L.alerts.push({ t: Math.round(tt), type: k, msg });
+  toast(msg); save(); if (liveHooks.ev) liveHooks.ev(); if (liveHooks.alerts) liveHooks.alerts();
+}
+function analyze(L, t, pts, ror) {
+  if (!DAQ.mode) return;
+  if (Date.now() - DAQ.ts > 3000) addAlert(L, 'lost', '센서 신호 끊김 — 연결을 확인하세요', 20);
+  const bt = pts.filter(p => p.bt != null); if (bt.length < 8) return;
+  const ev = L.events, cur = bt[bt.length - 1];
+  if (ev.tp == null && t > 25) {
+    let mn = bt[0]; bt.forEach(p => { if (p.bt < mn.bt) mn = p; });
+    if (mn.t >= 15 && cur.bt - mn.bt >= 4 && cur.t - mn.t >= 8) autoMark(L, 'tp', mn.t, `터닝포인트 ${fmtT(mn.t)} · ${mn.bt.toFixed(1)}°C`);
+  }
+  if (ev.tp != null && ev.dry == null && cur.bt >= (+S.settings.dryTemp || 160)) autoMark(L, 'dry', cur.t, `건조 종료 자동 감지 (BT ${cur.bt.toFixed(0)}°C)`);
+  // 크랙 소리
+  const cr = L.cracks || [], recent = cr.filter(c => c >= t - 10);
+  if (ev.fc == null && cur.bt >= 170 && recent.length >= 4) autoMark(L, 'fc', recent[0], '1차 크랙 감지 (소리)');
+  if (ev.fc != null && ev.fce == null && cr.filter(c => c >= ev.fc).length >= 15 && t - cr[cr.length - 1] >= 25) autoMark(L, 'fce', cr[cr.length - 1], '1차 크랙 종료 (소리 소멸)');
+  if (ev.fc != null && ev.sc == null && cur.bt >= 210 && t > ev.fc + 90 && recent.length >= 6) autoMark(L, 'sc', recent[0], '2차 크랙 감지 (소리)');
+  // RoR 이상
+  const rn = ror[ror.length - 1]; if (!rn || ev.tp == null) return;
+  const rw = ror.filter(r => r.t >= rn.t - 20), rmax = Math.max(...rw.map(r => r.v)), rmin = Math.min(...rw.map(r => r.v));
+  if (ev.dry != null && ev.fc == null && rmax - rn.v >= 5) addAlert(L, 'crash', `RoR 급락 −${(rmax - rn.v).toFixed(1)}°C/분 — 크래시 주의 (화력↑ / 풍량↓)`);
+  const b20 = bt.find(p => p.t >= cur.t - 20);
+  if (b20 && cur.t - b20.t >= 15 && t > ev.tp + 40 && ev.fce == null && cur.bt < 208) {
+    const slope = (cur.bt - b20.bt) / (cur.t - b20.t) * 60;
+    if (slope <= 1) addAlert(L, 'stall', `BT 상승 정체 (${slope.toFixed(1)}°C/분) — 스톨 / 수분 방출 정체`, 45);
+  }
+  if (ev.fc != null && t > ev.fc + 10 && rn.v - rmin >= 2) addAlert(L, 'flick', `RoR 재상승(플릭) +${(rn.v - rmin).toFixed(1)}°C/분 — 화력 과다 주의`, 45);
+  else if (ev.fc == null && cur.bt >= 185 && rn.v - rmin >= 1.5) addAlert(L, 'fcmaybe', '크랙 임박/의심: RoR 반등 감지', 30);
+}
 
 /* ============ 홈 ============ */
 function vHome(el) {
@@ -337,24 +509,38 @@ const liveT = () => (Date.now() - S.live.startedAt) / 1000;
 
 function vRoast(el) {
   if (!S.live) return vSetup(el);
-  const L = S.live, last = L.points[L.points.length - 1] || {};
+  const L = S.live; L.alerts = L.alerts || []; L.cracks = L.cracks || []; L.det = L.det || {};
+  const last = L.points[L.points.length - 1] || {};
+  const ref = L.refId ? S.roasts.find(r => r.id === L.refId) : null;
   el.innerHTML = `
     <div class="card">
       <div class="row sp"><div><div class="muted" style="font-size:12px">${esc(L.name)} · ${L.batchG}g</div><div class="timer" id="lvTimer">0:00</div></div>
         <div style="text-align:right"><div class="muted" style="font-size:12px" id="lvPhase"></div>
           <div class="big" style="color:var(--bt)" id="lvBT">-</div><div class="muted" style="font-size:12px">BT °C</div></div>
         <div style="text-align:right"><div class="big" style="color:var(--ror)" id="lvRor">-</div><div class="muted" style="font-size:12px">RoR °C/분</div></div></div>
+      <div class="grid g4" style="margin-top:12px">
+        <div class="stat"><div class="k">RoR 변화 (30초)</div><div class="v" style="font-size:18px" id="lvDR">-</div></div>
+        <div class="stat"><div class="k">ET</div><div class="v" style="font-size:18px" id="lvET">-</div></div>
+        <div class="stat"><div class="k">DTR</div><div class="v" style="font-size:18px" id="lvDTR">-</div></div>
+        <div class="stat"><div class="k">${ref ? '참고 대비 BT' : '크랙 소리'}</div><div class="v" style="font-size:18px" id="lvX">-</div></div>
+      </div>
     </div>
     <div class="card">
       <canvas class="chart" id="lvChart"></canvas>
       <div class="readout" id="lvRead"></div>
-      <div class="legend"><span><i style="background:var(--bt)"></i>BT</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--ror)"></i>RoR</span>${L.refId ? '<span><i style="background:#888"></i>참고 곡선(점선)</span>' : ''}</div>
+      <div class="legend"><span><i style="background:var(--bt)"></i>BT</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--ror)"></i>RoR</span><span><i style="background:var(--accent)"></i>크랙 소리</span>${ref ? '<span><i style="background:#888"></i>참고 곡선(점선)</span>' : ''}</div>
     </div>
+    <div class="card"><h3>자동 분석 로그</h3><div class="alerts" id="alertList"></div></div>
     <div class="card">
-      <h3>온도 기록 <span class="muted" style="font-weight:400">— 값을 바꾸고 Enter. 시간은 자동 기록</span></h3>
+      <h3>이벤트 <span class="muted" style="font-weight:400">— 자동 감지된 항목도 탭하면 해제/수정</span></h3>
+      <div class="ev-grid" id="evGrid"></div>
+    </div>
+    ${daqPanel()}
+    <div class="card">
+      <h3>수동 입력 <span class="muted" style="font-weight:400">— 센서 미연결 시 값을 바꾸고 Enter</span></h3>
       <div class="row" style="flex-wrap:nowrap">
-        <div style="flex:1"><label>BT (원두 온도)</label><input id="inBT" type="number" step="0.1" inputmode="decimal" value="${last.bt ?? L.chargeTemp ?? ''}"></div>
-        <div style="flex:1"><label>ET (배기/드럼 온도)</label><input id="inET" type="number" step="0.1" inputmode="decimal" value="${last.et ?? ''}"></div>
+        <div style="flex:1"><label>BT</label><input id="inBT" type="number" step="0.1" inputmode="decimal" value="${last.bt ?? L.chargeTemp ?? ''}"></div>
+        <div style="flex:1"><label>ET</label><input id="inET" type="number" step="0.1" inputmode="decimal" value="${last.et ?? ''}"></div>
         <button class="btn pri" id="btnLog" style="align-self:flex-end">기록</button>
       </div>
       <div class="row" style="margin-top:10px;flex-wrap:nowrap">
@@ -364,60 +550,58 @@ function vRoast(el) {
       </div>
       <div id="ctlList" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
-    <div class="card">
-      <h3>이벤트</h3>
-      <div class="ev-grid" id="evGrid"></div>
-    </div>
     <div class="row">
       <button class="btn dan" id="btnDrop" style="flex:2;padding:14px;font-size:17px">⏹ 배출 (로스팅 종료)</button>
       <button class="btn" id="btnCancel" style="flex:1">취소</button>
     </div>
     <div class="card" style="margin-top:14px"><h3>알림</h3>
-      <div class="row"><label style="margin:0">온도 입력 알림음</label>
+      <div class="row"><label style="margin:0">수동 입력 알림음</label>
         <select id="selBeep" style="width:auto"><option value="0">끄기</option><option value="30">30초마다</option><option value="60">60초마다</option></select></div></div>`;
   $('#selBeep').value = S.settings.beepSec;
   $('#selBeep').onchange = e => { S.settings.beepSec = +e.target.value; save(); beepAt = Math.floor(liveT() / (S.settings.beepSec || 1)) + 1; };
-  const ref = L.refId ? S.roasts.find(r => r.id === L.refId) : null;
-  const cv = $('#lvChart');
+  const cv = $('#lvChart'), mkPts = () => ptsOf({ chargeTemp: L.chargeTemp, points: L.points });
   const lvSeries = () => {
-    const rr = { chargeTemp: L.chargeTemp, points: L.points };
-    const s = seriesOf(rr);
+    const s = seriesOf({ chargeTemp: L.chargeTemp, points: L.points });
     if (ref) s.push(...seriesOf(ref, { color: '#888', etColor: '#667', rorColor: '#6a7', dash: [5, 4], et: false, label: '참고' }));
     return s;
   };
   attachReadout(cv, $('#lvRead'), lvSeries);
+  let lastSave = Date.now();
   const refresh = () => {
     const t = liveT();
+    if (daqFresh()) { const r = Math.round(t), lp = L.points[L.points.length - 1]; if (!lp || lp.t < r) L.points.push({ t: r, bt: +DAQ.bt.toFixed(2), et: DAQ.et != null ? +DAQ.et.toFixed(2) : null }); }
+    const pts = mkPts(), ror = rorSeries(pts);
+    analyze(L, t, pts, ror);
     $('#lvTimer').textContent = fmtT(t);
-    const ph = L.events.fc != null ? '디벨롭먼트' : L.events.dry != null ? '메일라드' : '건조';
-    $('#lvPhase').textContent = L.events.fc != null ? ph + ' ' + fmtT(t - L.events.fc) : ph;
+    $('#lvPhase').textContent = L.events.fc != null ? '디벨롭먼트 ' + fmtT(t - L.events.fc) : L.events.dry != null ? '메일라드' : L.events.tp != null ? '건조 (터닝포인트 후)' : '건조';
     const lp = L.points[L.points.length - 1];
     $('#lvBT').textContent = lp && lp.bt != null ? (+lp.bt).toFixed(1) : '-';
-    const ror = rorSeries(ptsOf({ chargeTemp: L.chargeTemp, points: L.points }));
-    $('#lvRor').textContent = ror.length ? ror[ror.length - 1].v.toFixed(1) : '-';
+    $('#lvET').textContent = lp && lp.et != null ? (+lp.et).toFixed(1) : '-';
+    const rn = ror[ror.length - 1], r30 = ror.filter(r => r.t <= (rn ? rn.t - 30 : 0)).pop();
+    $('#lvRor').textContent = rn ? rn.v.toFixed(1) : '-';
+    $('#lvDR').textContent = rn && r30 ? ((rn.v - r30.v >= 0 ? '▲ +' : '▼ ') + (rn.v - r30.v).toFixed(1)) : '-';
+    $('#lvDTR').textContent = L.events.fc != null ? ((t - L.events.fc) / t * 100).toFixed(1) + '%' : '-';
+    if (ref && lp && lp.bt != null) { const b = btAt(ptsOf(ref), t); $('#lvX').textContent = b != null ? ((lp.bt - b >= 0 ? '+' : '') + (lp.bt - b).toFixed(1) + '°C') : '-'; }
+    else $('#lvX').textContent = L.cracks.length + '회';
     const mk = []; EVENTS.forEach(ev => { if (L.events[ev.k] != null) mk.push({ x: L.events[ev.k], label: ev.name }); });
-    const o = { series: lvSeries(), markers: mk, xmax: Math.max(t, 600) + 30, now: t };
-    // 참고 곡선의 이벤트도 표시
-    if (ref) markersOf(ref).forEach(m => mk.push({ x: m.x, label: '', color: '#555' }));
-    drawChart(cv, o);
-    if (S.settings.beepSec) {
-      const n = Math.floor(t / S.settings.beepSec);
-      if (n >= beepAt && t > 1) { beepAt = n + 1; beep(); }
-    }
+    drawChart(cv, { series: lvSeries(), markers: mk, ticks: L.cracks, xmax: Math.max(t, 600) + 30, now: t });
+    if (S.settings.beepSec && !daqFresh()) { const n = Math.floor(t / S.settings.beepSec); if (n >= beepAt && t > 1) { beepAt = n + 1; beep(); } }
+    if (Date.now() - lastSave > 5000) { save(); lastSave = Date.now(); }
   };
   const renderEv = () => {
     $('#evGrid').innerHTML = EVENTS.map(ev => {
       const t = L.events[ev.k];
-      return `<button class="btn ${t != null ? 'done' : ''}" data-ev="${ev.k}">${ev.name}<small>${t != null ? fmtT(t) + ' · ' + num(btAt(ptsOf({ chargeTemp: L.chargeTemp, points: L.points }), t)) + '°C' : (ev.sub || '탭하여 기록')}</small></button>`;
+      return `<button class="btn ${t != null ? 'done' : ''}" data-ev="${ev.k}">${ev.name}<small>${t != null ? fmtT(t) + ' · ' + num(btAt(mkPts(), t)) + '°C' : (ev.sub || '탭하여 기록')}</small></button>`;
     }).join('');
     $('#ctlList').innerHTML = L.controls.length ? '화력/풍량: ' + L.controls.map(c => `${fmtT(c.t)} (화력 ${esc(c.fire || '-')} / 풍량 ${esc(c.air || '-')})`).join(' · ') : '';
     $('#evGrid').querySelectorAll('[data-ev]').forEach(b => b.onclick = () => {
-      const k = b.dataset.ev;
-      L.events[k] = L.events[k] != null ? null : Math.round(liveT());
-      if (L.events[k] == null) delete L.events[k];
+      const k = b.dataset.ev; L.det.no = L.det.no || {};
+      if (L.events[k] != null) { delete L.events[k]; L.det.no[k] = 1; } else L.events[k] = Math.round(liveT());
       save(); renderEv(); refresh();
     });
   };
+  const renderAlerts = () => { $('#alertList').innerHTML = L.alerts.length ? L.alerts.slice().reverse().map(a => `<div><b>${fmtT(a.t)}</b>${esc(a.msg)}</div>`).join('') : '<span class="muted">센서를 연결하면 터닝포인트·건조 종료·크랙·RoR 이상을 자동으로 표시합니다.</span>'; };
+  liveHooks.ev = renderEv; liveHooks.alerts = renderAlerts;
   const logPoint = () => {
     const bt = $('#inBT').value, et = $('#inET').value;
     if (bt === '' && et === '') return;
@@ -432,12 +616,11 @@ function vRoast(el) {
   };
   $('#btnCancel').onclick = () => { if (confirm('진행 중인 로스팅을 기록 없이 취소할까요?')) { S.live = null; save(); go('roast'); } };
   $('#btnDrop').onclick = () => {
-    const bt = $('#inBT').value, et = $('#inET').value;
-    const t = Math.round(liveT());
-    if (bt !== '') L.points.push({ t, bt: +bt, et: et === '' ? null : +et });
+    const bt = $('#inBT').value, et = $('#inET').value, t = Math.round(liveT());
+    if (!daqFresh() && bt !== '') L.points.push({ t, bt: +bt, et: et === '' ? null : +et });
     L.events.drop = t; save(); finishModal();
   };
-  renderEv(); refresh();
+  renderEv(); renderAlerts(); daqUI(); refresh();
   tickId = setInterval(refresh, 1000);
 }
 function beep() {
@@ -455,6 +638,7 @@ function vSetup(el, pre = {}) {
   const roasts = S.roasts.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
   el.innerHTML = `
     <h2>새 로스팅</h2>
+    ${daqPanel()}
     <form class="card" data-form="start">
       <div class="field"><label>로스팅 이름 *</label><input name="name" required placeholder="예: 에티오피아 예가체프 #3" value="${esc(pre.name || '')}"></div>
       <div class="field"><label>생두</label><select name="greenId">${greenOptions(pre.greenId)}</select></div>
@@ -468,16 +652,18 @@ function vSetup(el, pre = {}) {
         <div class="field"><label>참고 곡선 (겹쳐서 보기)</label><select name="refId"><option value="">없음</option>${roasts.map(r => `<option value="${r.id}" ${pre.refId === r.id ? 'selected' : ''}>${esc(r.date)} · ${esc(r.name)}</option>`).join('')}</select></div>
       </div>
       <div class="field"><label>로스터기 / 메모</label><input name="roaster" placeholder="예: 1kg 직화" value="${esc(pre.roaster ?? S.settings.roaster)}"></div>
-      <button class="btn pri" style="width:100%;padding:14px;font-size:17px">🔥 투입 — 타이머 시작</button>
+      <label class="chk" style="color:var(--text);font-size:14px"><input type="checkbox" id="autoCharge"> 투입 자동 감지 — 생두를 넣어 BT가 급락하면 타이머 자동 시작 (이름·투입량을 먼저 입력)</label>
+      <button class="btn pri" style="width:100%;padding:14px;font-size:17px;margin-top:8px">🔥 투입 — 타이머 시작</button>
     </form>
     <button class="btn" style="width:100%" data-act="manual">✍️ 과거 로스팅 수동 입력</button>`;
+  daqUI();
 }
-function startRoast(f) {
+function startRoast(f, startedAt) {
   S.settings.roaster = f.roaster || '';
   S.live = {
-    name: f.name, greenId: f.greenId || '', batchG: +f.batchG, chargeTemp: f.chargeTemp === '' ? null : +f.chargeTemp,
+    name: f.name, greenId: f.greenId || '', batchG: +f.batchG || 0, chargeTemp: f.chargeTemp === '' ? null : +f.chargeTemp,
     ambient: f.ambient === '' ? null : +f.ambient, level: f.level, refId: f.refId, roaster: f.roaster,
-    startedAt: Date.now(), date: today(), points: [], events: {}, controls: []
+    startedAt: startedAt || Date.now(), date: today(), points: [], events: {}, controls: [], alerts: [], cracks: [], det: {}
   };
   beepAt = 1; save(); go('roast');
 }
@@ -513,7 +699,7 @@ function finishModal() {
 }
 function saveLive(f) {
   const L = S.live;
-  const r = { id: uid(), name: L.name, date: L.date, greenId: L.greenId, batchG: L.batchG, chargeTemp: L.chargeTemp, ambient: L.ambient, roaster: L.roaster, points: L.points, events: L.events, controls: L.controls };
+  const r = { id: uid(), name: L.name, date: L.date, greenId: L.greenId, batchG: L.batchG, chargeTemp: L.chargeTemp, ambient: L.ambient, roaster: L.roaster, points: L.points, events: L.events, controls: L.controls, alerts: L.alerts || [], cracks: L.cracks || [], source: DAQ.mode || 'manual' };
   readMeta(f, r);
   S.roasts.push(r); S.live = null; save(); closeModal(); toast('저장되었습니다'); go('detail', r.id);
 }
@@ -623,13 +809,14 @@ function vDetail(el) {
       </table></div>
     </div>
     ${(r.controls || []).length ? `<div class="card"><h3>화력 / 풍량 변경</h3><div class="muted">${r.controls.map(c => `${fmtT(c.t)} 화력 ${esc(c.fire || '-')} / 풍량 ${esc(c.air || '-')}`).join(' · ')}</div></div>` : ''}
+    ${(r.alerts || []).length ? `<div class="card"><h3>자동 분석 로그</h3><div class="alerts">${r.alerts.map(a => `<div><b>${fmtT(a.t)}</b>${esc(a.msg)}</div>`).join('')}</div>${(r.cracks || []).length ? `<div class="muted" style="font-size:12px;margin-top:6px">감지된 크랙 소리 ${r.cracks.length}회 (차트 하단 주황 눈금)</div>` : ''}</div>` : ''}
     <div class="card"><h3>메모 · 컵핑</h3>
       <p style="white-space:pre-wrap;margin:0 0 8px">${esc(r.notes || '메모 없음')}</p>
       <div>컵핑: <b>${r.cup && r.cup.score != null ? r.cup.score + '점' : '-'}</b> ${r.cup && r.cup.notes ? '— ' + esc(r.cup.notes) : ''}</div></div>
     <button class="btn pri noprint" style="width:100%" data-act="again" data-id="${r.id}">🔁 이 로스팅을 참고 곡선으로 새 로스팅 시작</button>`;
   const cv = $('#dChart');
   const getS = () => seriesOf(r);
-  const redraw = () => drawChart(cv, { series: getS(), markers: markersOf(r), xmax: (m.total || 600) + 20 });
+  const redraw = () => drawChart(cv, { series: getS(), markers: markersOf(r), ticks: r.cracks, xmax: (m.total || 600) + 20 });
   attachReadout(cv, $('#dRead'), getS);
   redraw(); window.onresize = redraw;
 }
@@ -716,7 +903,7 @@ function vData(el) {
     const f = e.target.files[0]; if (!f) return;
     const rd = new FileReader();
     rd.onload = () => {
-      try { const d = JSON.parse(rd.result); if (!d.roasts) throw 0; if (!confirm('현재 데이터를 백업 파일로 덮어쓸까요?')) return; S = Object.assign(fresh(), d); save(); toast('복원 완료'); go('home'); }
+      try { const d = JSON.parse(rd.result); if (!d.roasts) throw 0; if (!confirm('현재 데이터를 백업 파일로 덮어쓸까요?')) return; S = Object.assign(fresh(), d); S.settings = Object.assign(fresh().settings, d.settings); save(); toast('복원 완료'); go('home'); }
       catch (err) { toast('올바른 백업 파일이 아닙니다'); }
     };
     rd.readAsText(f);
@@ -771,6 +958,10 @@ document.addEventListener('click', e => {
     case 'manual': manualModal(); break;
     case 'greenForm': greenForm(id); break;
     case 'print': window.print(); break;
+    case 'daqSerial': serialConnect(); break;
+    case 'daqSim': daqSim(); break;
+    case 'daqOff': daqOff(); break;
+    case 'micToggle': micToggle(); break;
     case 'edit': {
       const r = S.roasts.find(x => x.id === id);
       modal(`<h2>수정 — ${esc(r.name)}</h2><form data-form="edit" data-id="${id}">
@@ -797,6 +988,11 @@ document.addEventListener('click', e => {
     case 'sample': loadSample(); break;
     case 'wipe': if (confirm('모든 기록과 생두 데이터를 삭제합니다. 계속할까요?') && confirm('정말 삭제할까요? 되돌릴 수 없습니다.')) { S = fresh(); save(); go('home'); } break;
   }
+});
+document.addEventListener('change', e => {
+  const k = e.target.dataset && e.target.dataset.set; if (!k) return;
+  const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+  S.settings[k] = (e.target.type === 'number' || e.target.tagName === 'SELECT') && !isNaN(v) && v !== '' ? +v : v; save();
 });
 document.addEventListener('submit', e => {
   const form = e.target.closest('[data-form]'); if (!form) return;
