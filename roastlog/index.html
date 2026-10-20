@@ -126,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, theme: '' } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, theme: '', proto: 'modbus', parity: 'none', mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
@@ -342,39 +342,112 @@ function parseLine(line) { // "200.5,230.1" | "BT=200.5 ET=230.1" | "T1:200;T2:2
   if (typeof et !== 'number' || isNaN(et) || et < -50 || et > 450) et = null;
   return { bt, et };
 }
-function serialLine(line) {
-  const p = parseLine(line); if (!p) return;
-  let { bt, et } = p; const st = S.settings;
+/* ============ 장비 연결 핵심: 텍스트 라인 / Modbus RTU ============ */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function daqCal(bt, et) {
+  const st = S.settings;
   if (st.swap && et != null) [bt, et] = [et, bt];
   bt += +st.btOff || 0; if (et != null) et += +st.etOff || 0;
-  daqFeed(bt, et);
+  return [bt, et];
+}
+function serialLine(line) {
+  const p = parseLine(line); if (!p) return;
+  daqFeed(...daqCal(p.bt, p.et));
 }
 function daqFeed(bt, et) {
-  DAQ.bt = bt; DAQ.et = et; DAQ.ts = Date.now(); DAQ.n++;
+  DAQ.bt = bt; DAQ.et = et; DAQ.ts = Date.now(); DAQ.n++; DAQ.err = '';
   DAQ.hist.push({ ts: DAQ.ts, bt, et });
   while (DAQ.hist.length && DAQ.ts - DAQ.hist[0].ts > 60000) DAQ.hist.shift();
   daqUI(); chargeWatch();
+}
+function mbLog(msg) {
+  DAQ.logs = DAQ.logs || []; DAQ.logs.push(msg); if (DAQ.logs.length > 40) DAQ.logs.shift();
+  const el = $('#mbLog'); if (el) { el.textContent = DAQ.logs.join('\n'); el.scrollTop = el.scrollHeight; }
+}
+const crc16 = b => { let c = 0xFFFF; for (const x of b) { c ^= x; for (let i = 0; i < 8; i++) c = c & 1 ? (c >> 1) ^ 0xA001 : c >> 1; } return c; };
+function mbFrame(slave, fc, addr, qty) {
+  const f = [slave, fc, addr >> 8, addr & 255, qty >> 8, qty & 255], c = crc16(f); f.push(c & 255, c >> 8);
+  return Uint8Array.from(f);
+}
+function mbDecode(buf, slave, fc, qty) { // null = 아직 덜 받음
+  if (buf.length < 5) return null;
+  if (buf[1] === (fc | 0x80)) { const c = crc16(buf.slice(0, 3)); return (c & 255) === buf[3] && (c >> 8) === buf[4] ? { err: '장비 예외코드 ' + buf[2] + ' (주소/기능 불일치)' } : { err: 'CRC 오류' }; }
+  const need = 5 + qty * 2; if (buf.length < need) return null;
+  const f = buf.slice(0, need), c = crc16(f.slice(0, need - 2));
+  if ((c & 255) !== f[need - 2] || (c >> 8) !== f[need - 1]) return { err: 'CRC 오류' };
+  if (f[0] !== slave || f[1] !== fc || f[2] !== qty * 2) return { err: '응답 불일치' };
+  const regs = []; for (let i = 0; i < qty; i++) regs.push((f[3 + i * 2] << 8) | f[4 + i * 2]);
+  return { regs };
+}
+const sgn16 = v => v > 32767 ? v - 65536 : v;
+async function mbQuery(slave, fc, addr, qty = 1, timeout = 400) {
+  DAQ.rx.length = 0;
+  try { await DAQ.writer.write(mbFrame(slave, fc, addr, qty)); } catch (e) { return { err: '송신 실패' }; }
+  const t0 = Date.now();
+  while (Date.now() - t0 < timeout) { const r = mbDecode(DAQ.rx, slave, fc, qty); if (r) return r; await sleep(8); }
+  return { err: DAQ.rx.length ? '불완전 응답' : '응답 없음' };
+}
+async function mbPoll() {
+  const loop = DAQ.pollId = (DAQ.pollId || 0) + 1;
+  while (DAQ.mode === 'serial' && DAQ.proto === 'modbus' && DAQ.pollId === loop) {
+    if (DAQ.pause) { await sleep(100); continue; }
+    const st = S.settings, fc = +st.mbFc || 4;
+    const b = await mbQuery(+st.mbBtId, fc, +st.mbBtAddr, 1);
+    let e = null;
+    if (+st.mbEtId > 0) { await sleep(20); e = await mbQuery(+st.mbEtId, fc, +st.mbEtAddr, 1); }
+    if (DAQ.mode !== 'serial' || DAQ.pollId !== loop) break;
+    if (b.regs) { const sc = +st.mbScale || 10; daqFeed(...daqCal(sgn16(b.regs[0]) / sc, e && e.regs ? sgn16(e.regs[0]) / sc : null)); }
+    else { DAQ.err = 'BT ' + b.err + ' — ID/주소/배선 확인'; daqUI(); }
+    await sleep(150);
+  }
+}
+async function mbProbe() { // 수동 읽기 테스트
+  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
+  const v = id => +$('#' + id).value; DAQ.pause = true; await sleep(450);
+  const r = await mbQuery(v('prSlave'), v('prFc'), v('prAddr'), v('prQty') || 1, 600);
+  mbLog(`ID${v('prSlave')} FC${v('prFc')} 주소${v('prAddr')} → ` + (r.regs ? r.regs.map(x => sgn16(x)).join(', ') : r.err)); DAQ.pause = false;
+}
+async function mbScan() { // 흔한 조합 자동 탐색
+  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
+  DAQ.pause = true; await sleep(450); mbLog('--- 자동 탐색 시작 ---'); let hit = 0; const alive = new Set();
+  for (const slave of [1, 2, 3, 4]) for (const fc of [4, 3]) for (const addr of [1000, 0, 1, 1001]) {
+    const r = await mbQuery(slave, fc, addr, 1, 250);
+    if (r.regs) { hit++; mbLog(`✔ ID${slave} FC${fc} 주소${addr} = ${sgn16(r.regs[0])} (÷10 = ${(sgn16(r.regs[0]) / 10).toFixed(1)})`); }
+    if (r.regs || (r.err || '').startsWith('장비 예외')) alive.add(slave);
+  }
+  mbLog('응답한 장치 ID: ' + (alive.size ? [...alive].join(', ') : '없음'));
+  mbLog(hit ? '--- 탐색 끝: ✔ 항목 중 현재 온도와 같은 값을 찾아 설정하세요 ---' : '--- 응답 없음: 보레이트/패리티/COM포트/배선 확인 ---'); DAQ.pause = false;
 }
 async function serialConnect() {
   if (!('serial' in navigator)) return toast('Chrome 또는 Edge 브라우저(노트북)에서 사용하세요');
   try {
     await daqOff();
-    const port = await navigator.serial.requestPort();
-    await port.open({ baudRate: +S.settings.baud || 9600 });
-    DAQ.port = port; DAQ.mode = 'serial';
-    const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader(); DAQ.reader = reader;
+    const st = S.settings, port = await navigator.serial.requestPort();
+    await port.open({ baudRate: +st.baud || 9600, dataBits: 8, stopBits: 1, parity: st.parity || 'none' });
+    DAQ.port = port; DAQ.mode = 'serial'; DAQ.proto = st.proto || 'modbus'; DAQ.err = ''; DAQ.pause = false;
+    if (DAQ.proto === 'modbus') {
+      DAQ.rx = []; const rd = port.readable.getReader(); DAQ.reader = rd; DAQ.writer = port.writable.getWriter();
+      (async () => {
+        try { for (;;) { const { value, done } = await rd.read(); if (done) break; for (const b of value) DAQ.rx.push(b); } } catch (e) {}
+        if (DAQ.reader === rd) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
+      })();
+      mbPoll();
+    } else {
+      const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader(); DAQ.reader = reader; let buf = '';
+      (async () => {
+        try { for (;;) { const { value, done } = await reader.read(); if (done) break; buf += value; let i; while ((i = buf.indexOf('\n')) >= 0) { serialLine(buf.slice(0, i)); buf = buf.slice(i + 1); } } } catch (e) {}
+        if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
+      })();
+    }
     toast('연결되었습니다'); daqUI();
-    let buf = '';
-    (async () => {
-      try { for (;;) { const { value, done } = await reader.read(); if (done) break; buf += value; let i; while ((i = buf.indexOf('\n')) >= 0) { serialLine(buf.slice(0, i)); buf = buf.slice(i + 1); } } } catch (e) {}
-      if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
-    })();
   } catch (e) { if (e && e.name !== 'NotFoundError') toast('연결 실패: ' + (e.message || e)); }
 }
 async function daqOff() {
   if (DAQ.simTimer) { clearInterval(DAQ.simTimer); DAQ.simTimer = null; }
-  const r = DAQ.reader, p = DAQ.port; DAQ.reader = null; DAQ.port = null; DAQ.mode = null;
+  const r = DAQ.reader, w = DAQ.writer, p = DAQ.port; DAQ.reader = DAQ.writer = DAQ.port = null; DAQ.mode = null; DAQ.pollId = (DAQ.pollId || 0) + 1;
   try { if (r) await r.cancel(); } catch (e) {}
+  try { if (w) w.releaseLock(); } catch (e) {}
+  try { if (r) r.releaseLock(); } catch (e) {}
   try { if (p) await p.close(); } catch (e) {}
   DAQ.bt = DAQ.et = null; daqUI();
 }
@@ -408,23 +481,34 @@ function chargeWatch() { // 투입 자동 감지: BT가 8초 안에 10°C 이상
 function daqUI() {
   const el = $('#daqRead'), st = $('#daqState'); if (!el) return;
   const fresh = daqFresh();
-  el.innerHTML = fresh ? `<span style="color:var(--bt)">BT ${DAQ.bt.toFixed(1)}</span> &nbsp; <span style="color:var(--et)">ET ${DAQ.et != null ? DAQ.et.toFixed(1) : '-'}</span>` : '<span class="muted">신호 없음</span>';
+  el.innerHTML = fresh ? `<span style="color:var(--bt)">BT ${DAQ.bt.toFixed(1)}</span> &nbsp; <span style="color:var(--et)">ET ${DAQ.et != null ? DAQ.et.toFixed(1) : '-'}</span>` : '<span class="muted">신호 없음' + (DAQ.err ? ' · ' + esc(DAQ.err) : '') + '</span>';
   st.innerHTML = `<span class="dot ${fresh ? 'on' : ''}"></span>${DAQ.mode === 'serial' ? 'USB 연결됨' : DAQ.mode === 'sim' ? '시뮬레이터' : '미연결'}`;
 }
 function daqPanel() {
-  const st = S.settings, sel = (k, vals) => `<select data-set="${k}">${vals.map(v => `<option ${+st[k] === v ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
+  const st = S.settings, sel = (k, vals) => `<select data-set="${k}">${vals.map(v => `<option ${String(st[k]) === String(v) ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
+  const num = (k, step = 1) => `<input type="number" step="${step}" data-set="${k}" value="${st[k]}">`;
   return `<div class="card"><div class="row sp"><h3 style="margin:0">🔌 장비 연결</h3><span id="daqState" class="tag"></span></div>
     <div class="big" id="daqRead" style="margin:10px 0"></div>
     <div class="row"><button class="btn sm pri" data-act="daqSerial">USB 시리얼 연결</button><button class="btn sm" data-act="daqSim">시뮬레이터</button>
       <button class="btn sm" data-act="daqOff">해제</button><button class="btn sm" data-act="micToggle">${MIC.on ? '🎤 크랙 감지 끄기' : '🎤 크랙 소리 감지'}</button></div>
-    <details style="margin-top:10px"><summary class="muted">연결 · 보정 설정</summary><div class="grid g2" style="margin-top:8px">
-      <div><label>보레이트</label>${sel('baud', [9600, 19200, 38400, 57600, 115200])}</div>
-      <div><label>크랙 감지 민감도 (낮을수록 민감)</label>${sel('micSens', [2, 3, 4, 6, 8])}</div>
-      <div><label>BT 보정 (°C)</label><input type="number" step="0.1" data-set="btOff" value="${st.btOff}"></div>
-      <div><label>ET 보정 (°C)</label><input type="number" step="0.1" data-set="etOff" value="${st.etOff}"></div>
-      <div><label>건조 종료 기준 BT (°C)</label><input type="number" step="1" data-set="dryTemp" value="${st.dryTemp}"></div>
-      <div><label>시뮬레이터 속도 (배)</label>${sel('simSpeed', [1, 2, 4, 8])}</div>
-      <label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="swap" ${st.swap ? 'checked' : ''}> BT/ET 채널 서로 바꾸기</label></div></details></div>`;
+    <details style="margin-top:10px"><summary class="muted">연결 설정 (프로토콜 · 보레이트 · Modbus 주소)</summary>
+      <div class="grid g2" style="margin-top:8px">
+        <div><label>프로토콜</label><select data-set="proto"><option value="modbus" ${st.proto === 'modbus' ? 'selected' : ''}>Modbus RTU (이지스터/Autonics 등)</option><option value="text" ${st.proto === 'text' ? 'selected' : ''}>텍스트 라인 (Arduino 등)</option></select></div>
+        <div><label>보레이트</label>${sel('baud', [9600, 19200, 38400, 57600, 115200])}</div>
+        <div><label>패리티</label>${sel('parity', ['none', 'even', 'odd'])}</div>
+        <div><label>Modbus 기능코드</label>${sel('mbFc', [4, 3])}</div>
+        <div><label>BT 장치 ID</label>${num('mbBtId')}</div><div><label>BT 레지스터 주소 (10진수)</label>${num('mbBtAddr')}</div>
+        <div><label>ET 장치 ID (0이면 사용 안 함)</label>${num('mbEtId')}</div><div><label>ET 레지스터 주소</label>${num('mbEtAddr')}</div>
+        <div><label>값 나누기 (소수점 처리, 보통 10)</label>${num('mbScale')}</div>
+        <div><label>BT/ET 채널 서로 바꾸기</label><label class="row" style="margin:6px 0 0"><input type="checkbox" style="width:auto" data-set="swap" ${st.swap ? 'checked' : ''}> 바꾸기</label></div>
+        <div><label>BT 보정 (°C)</label>${num('btOff', .1)}</div><div><label>ET 보정 (°C)</label>${num('etOff', .1)}</div>
+        <div><label>건조 종료 기준 BT (°C)</label>${num('dryTemp')}</div><div><label>크랙 감지 민감도 (낮을수록 민감)</label>${sel('micSens', [2, 3, 4, 6, 8])}</div>
+        <div><label>시뮬레이터 속도 (배)</label>${sel('simSpeed', [1, 2, 4, 8])}</div></div>
+      <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
+      <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
+      <div class="row" style="margin:8px 0"><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
+      <pre id="mbLog" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:150px;overflow:auto;margin:0;white-space:pre-wrap">${esc((DAQ.logs || []).join('\n'))}</pre>
+    </details></div>`;
 }
 
 /* 마이크 크랙 감지: 고주파 순간 소리(2kHz↑)가 평소 소음의 N배를 넘으면 크랙 1회 */
@@ -977,6 +1061,8 @@ document.addEventListener('click', e => {
     case 'daqSerial': serialConnect(); break;
     case 'daqSim': daqSim(); break;
     case 'daqOff': daqOff(); break;
+    case 'mbProbe': mbProbe(); break;
+    case 'mbScan': mbScan(); break;
     case 'micToggle': micToggle(); break;
     case 'edit': {
       const r = S.roasts.find(x => x.id === id);
