@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1e1712">
+<title>DAYY 로스팅 로그</title>
+<style>
+:root {
+  --bg: #1e1712;
+  --panel: #2a211a;
+  --panel2: #342a21;
+  --line: #4a3c30;
+  --text: #f3e9da;
+  --muted: #a89782;
+  --accent: #e0a458;
+  --bt: #ef5a3c;
+  --et: #4aa3df;
+  --ror: #8bc34a;
+  --ok: #7cb342;
+  --danger: #e5484d;
+  --radius: 12px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body { font-family: "Noto Sans KR", "Malgun Gothic", -apple-system, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.5; padding-bottom: 84px; }
+h1, h2, h3 { margin: 0; }
+h2 { font-size: 20px; margin-bottom: 12px; }
+h3 { font-size: 15px; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 10; }
+header .logo { font-weight: 800; font-size: 18px; letter-spacing: .5px; }
+header .logo b { color: var(--accent); }
+header .live-pill { margin-left: auto; background: var(--danger); color: #fff; font-size: 12px; padding: 3px 10px; border-radius: 99px; display: none; cursor: pointer; }
+header .live-pill.on { display: block; animation: pulse 1.5s infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 20; }
+nav button { flex: 1; background: none; border: 0; padding: 10px 0 9px; color: var(--muted); font-size: 11px; cursor: pointer; }
+nav button .ic { display: block; font-size: 20px; line-height: 1.2; }
+nav button.on { color: var(--accent); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+.grid { display: grid; gap: 10px; }
+.g2 { grid-template-columns: repeat(2, 1fr); }
+.g3 { grid-template-columns: repeat(3, 1fr); }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 560px) { .g4 { grid-template-columns: repeat(2, 1fr); } }
+.stat { background: var(--panel2); border-radius: 10px; padding: 10px 12px; }
+.stat .k { font-size: 12px; color: var(--muted); }
+.stat .v { font-size: 22px; font-weight: 700; }
+.stat .v small { font-size: 12px; color: var(--muted); font-weight: 400; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+input, select, textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea { min-height: 70px; resize: vertical; }
+.field { margin-bottom: 10px; }
+.btn { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; cursor: pointer; font-weight: 600; }
+.btn:hover { border-color: var(--accent); }
+.btn.pri { background: var(--accent); color: #2a1a08; border-color: var(--accent); }
+.btn.dan { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.sm { padding: 5px 10px; font-size: 13px; }
+.btn:disabled { opacity: .4; cursor: default; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row.sp { justify-content: space-between; }
+.muted { color: var(--muted); }
+.list-item { display: flex; justify-content: space-between; gap: 10px; padding: 11px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.list-item:last-child { border-bottom: 0; }
+.list-item .t { font-weight: 600; }
+.list-item .s { font-size: 12px; color: var(--muted); }
+.tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); margin-right: 4px; }
+.tag.warn { color: var(--danger); border-color: var(--danger); }
+canvas.chart { width: 100%; height: 320px; display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; touch-action: pan-y; }
+.readout { font-size: 13px; min-height: 20px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.timer { font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
+.big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.phase { height: 14px; border-radius: 7px; overflow: hidden; display: flex; background: var(--panel2); margin: 6px 0; }
+.phase span { display: block; height: 100%; }
+.ev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ev-grid .btn { text-align: left; }
+.ev-grid .btn small { display: block; color: var(--muted); font-weight: 400; }
+.ev-grid .btn.done { border-color: var(--ok); }
+.ev-grid .btn.done small { color: var(--ok); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 600; }
+.scroll-x { overflow-x: auto; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.65); z-index: 50; display: flex; align-items: flex-end; justify-content: center; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 16px 16px 0 0; width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; padding: 18px; }
+@media (min-width: 700px) { .modal-bg { align-items: center; } .modal { border-radius: 16px; } }
+.chk { display: flex; align-items: center; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.chk input { width: auto; }
+.chk i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.empty { text-align: center; color: var(--muted); padding: 28px 0; }
+@media print {
+  header, nav, .noprint { display: none !important; }
+  body { background: #fff; color: #000; padding: 0; }
+  .card, .stat { background: #fff; border-color: #bbb; color: #000; }
+  canvas.chart { background: #fff; border-color: #bbb; }
+  .muted, .k, label, th { color: #444 !important; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">DAYY <b>ROAST</b> LOG</div>
+  <div class="live-pill" id="livePill">● 로스팅 진행 중</div>
+</header>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="modalRoot"></div>
+
+<script>
+'use strict';
+/* ============ 저장소 ============ */
+const KEY = 'dayy.roastlog.v1';
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '' } });
+function load() {
+  try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) return Object.assign(fresh(), d); } catch (e) {}
+  return fresh();
+}
+let S = load();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { toast('저장 실패: 브라우저 저장공간을 확인하세요'); } }
+
+/* ============ 유틸 ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const fmtT = s => (s == null || isNaN(s)) ? '-' : Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const num = (v, d = 1) => (v == null || v === '' || isNaN(v)) ? '-' : (+v).toFixed(d);
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const parseT = str => { // "mm:ss" 또는 초 숫자
+  str = String(str).trim(); if (!str) return null;
+  if (str.includes(':')) { const [m, s] = str.split(':'); const v = (+m) * 60 + (+s); return isNaN(v) ? null : v; }
+  const v = +str; return isNaN(v) ? null : v;
+};
+function toast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#000c;color:#fff;padding:9px 16px;border-radius:99px;z-index:99;font-size:14px';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 2200);
+}
+const EVENTS = [
+  { k: 'dry', name: '건조 종료', sub: '옐로잉' },
+  { k: 'fc', name: '1차 크랙', sub: '시작' },
+  { k: 'fce', name: '1차 크랙 종료', sub: '' },
+  { k: 'sc', name: '2차 크랙', sub: '시작' },
+];
+const LEVELS = ['라이트', '라이트 미디엄', '미디엄', '미디엄 다크', '다크'];
+
+/* ============ 계산 ============ */
+function ptsOf(r) { // BT/ET 포인트 (투입 시점 포함)
+  const p = (r.points || []).slice().sort((a, b) => a.t - b.t);
+  if (r.chargeTemp != null && r.chargeTemp !== '' && (!p.length || p[0].t > 0)) p.unshift({ t: 0, bt: +r.chargeTemp, et: null });
+  return p;
+}
+function rorSeries(p, win = 30) { // [{t, v}] °C/분
+  const bt = p.filter(x => x.bt != null && !isNaN(x.bt) && x.t > 0); // 투입 시점(t=0)은 RoR 계산 제외
+  const raw = [];
+  for (let i = 0; i < bt.length; i++) {
+    if (bt[i].t < 60) continue;
+    let j = -1;
+    for (let k = i - 1; k >= 0; k--) if (bt[i].t - bt[k].t >= win - 5) { j = k; break; }
+    if (j < 0) continue;
+    raw.push({ t: bt[i].t, v: (bt[i].bt - bt[j].bt) / (bt[i].t - bt[j].t) * 60 });
+  }
+  return raw.map((x, i) => { // 3점 이동평균
+    const a = raw.slice(Math.max(0, i - 1), i + 2);
+    return { t: x.t, v: a.reduce((s, y) => s + y.v, 0) / a.length };
+  });
+}
+function btAt(p, t) {
+  const bt = p.filter(x => x.bt != null && !isNaN(x.bt));
+  if (!bt.length || t == null) return null;
+  if (t <= bt[0].t) return bt[0].bt;
+  for (let i = 1; i < bt.length; i++) if (bt[i].t >= t) {
+    const a = bt[i - 1], b = bt[i]; return a.bt + (b.bt - a.bt) * (t - a.t) / ((b.t - a.t) || 1);
+  }
+  return bt[bt.length - 1].bt;
+}
+function metrics(r) {
+  const e = r.events || {}, p = ptsOf(r);
+  const last = p.length ? p[p.length - 1].t : null;
+  const total = e.drop ?? last;
+  const m = { total, dry: e.dry ?? null, fc: e.fc ?? null, fce: e.fce ?? null, sc: e.sc ?? null };
+  m.maillard = (e.dry != null && e.fc != null) ? e.fc - e.dry : null;
+  m.dev = (e.fc != null && total != null) ? total - e.fc : null;
+  m.dtr = (m.dev != null && total) ? m.dev / total * 100 : null;
+  m.dryPct = (e.dry != null && total) ? e.dry / total * 100 : null;
+  m.maiPct = (m.maillard != null && total) ? m.maillard / total * 100 : null;
+  m.loss = (r.batchG > 0 && r.roastedG > 0) ? (r.batchG - r.roastedG) / r.batchG * 100 : null;
+  m.dropTemp = btAt(p, total);
+  m.fcTemp = btAt(p, e.fc);
+  m.dryTemp = btAt(p, e.dry);
+  const ror = rorSeries(p);
+  m.rorFc = e.fc != null ? (ror.filter(x => x.t <= e.fc).pop() || {}).v ?? null : null;
+  return m;
+}
+function greenRemainG(g) {
+  const used = S.roasts.filter(r => r.greenId === g.id).reduce((s, r) => s + (+r.batchG || 0), 0);
+  return (+g.kg || 0) * 1000 - used;
+}
+
+/* ============ 차트 ============ */
+const COLORS = ['#ef5a3c', '#4aa3df', '#8bc34a', '#e0a458', '#b97bd6'];
+function drawChart(cv, o) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pad = { l: 38, r: 34, t: 14, b: 24 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  let xmax = Math.max(o.xmax || 0, 600);
+  let ymin = 60, ymax = 250, rmax = 25;
+  o.series.forEach(s => s.pts.forEach(p => {
+    if (s.axis === 'R') rmax = Math.max(rmax, Math.ceil(p.y / 5) * 5);
+    else { ymax = Math.max(ymax, Math.ceil(p.y / 10) * 10); ymin = Math.min(ymin, Math.floor(p.y / 10) * 10); }
+    xmax = Math.max(xmax, p.x);
+  }));
+  xmax = Math.ceil(xmax / 60) * 60;
+  const X = t => pad.l + t / xmax * pw;
+  const Y = v => pad.t + ph - (v - ymin) / (ymax - ymin) * ph;
+  const R = v => pad.t + ph - v / rmax * ph;
+  c.clearRect(0, 0, W, H);
+  c.font = '11px sans-serif'; c.lineWidth = 1;
+  // 그리드
+  c.strokeStyle = '#3a2f26'; c.fillStyle = '#a89782';
+  c.textAlign = 'right';
+  for (let v = Math.ceil(ymin / 20) * 20; v <= ymax; v += 20) {
+    c.beginPath(); c.moveTo(pad.l, Y(v)); c.lineTo(W - pad.r, Y(v)); c.stroke();
+    c.fillText(v, pad.l - 5, Y(v) + 4);
+  }
+  c.textAlign = 'center';
+  for (let t = 0; t <= xmax; t += 60) {
+    c.beginPath(); c.moveTo(X(t), pad.t); c.lineTo(X(t), pad.t + ph); c.stroke();
+    c.fillText(t / 60, X(t), H - 7);
+  }
+  c.textAlign = 'left'; c.fillStyle = '#8bc34a';
+  for (let v = 0; v <= rmax; v += 5) c.fillText(v, W - pad.r + 4, R(v) + 4);
+  // 이벤트 세로선
+  (o.markers || []).forEach((m, mi) => {
+    c.strokeStyle = m.color || '#7a6a58'; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(X(m.x), pad.t); c.lineTo(X(m.x), pad.t + ph); c.stroke(); c.setLineDash([]);
+    c.fillStyle = m.color || '#d8c7ae'; c.textAlign = 'left';
+    c.save(); c.translate(X(m.x) + 3, pad.t + 10 + (mi % 3) * 12); c.fillText(m.label, 0, 0); c.restore();
+  });
+  // 시리즈
+  o.series.forEach(s => {
+    if (!s.pts.length) return;
+    c.strokeStyle = s.color; c.lineWidth = s.width || 2; c.setLineDash(s.dash || []);
+    c.beginPath();
+    s.pts.forEach((p, i) => { const x = X(p.x), y = s.axis === 'R' ? R(p.y) : Y(p.y); i ? c.lineTo(x, y) : c.moveTo(x, y); });
+    c.stroke(); c.setLineDash([]);
+    if (s.dots) { c.fillStyle = s.color; s.pts.forEach(p => { c.beginPath(); c.arc(X(p.x), s.axis === 'R' ? R(p.y) : Y(p.y), 2.5, 0, 7); c.fill(); }); }
+  });
+  if (o.now != null) { c.strokeStyle = '#fff6'; c.beginPath(); c.moveTo(X(o.now), pad.t); c.lineTo(X(o.now), pad.t + ph); c.stroke(); }
+  cv._geom = { pad, pw, xmax };
+}
+function attachReadout(cv, out, getSeries) { // 마우스/터치 위치의 값 표시
+  const f = ev => {
+    const g = cv._geom; if (!g) return;
+    const rect = cv.getBoundingClientRect();
+    const t = Math.max(0, Math.min(g.xmax, (ev.clientX - rect.left - g.pad.l) / g.pw * g.xmax));
+    const parts = getSeries().map(s => {
+      if (!s.pts.length) return '';
+      let best = s.pts[0]; s.pts.forEach(p => { if (Math.abs(p.x - t) < Math.abs(best.x - t)) best = p; });
+      if (Math.abs(best.x - t) > 40) return '';
+      return `<span style="color:${s.color}">${esc(s.name)} ${best.y.toFixed(1)}</span>`;
+    }).filter(Boolean);
+    out.innerHTML = fmtT(t) + ' &nbsp; ' + parts.join(' &nbsp; ');
+  };
+  cv.addEventListener('pointermove', f); cv.addEventListener('pointerdown', f);
+}
+function seriesOf(r, opt = {}) {
+  const p = ptsOf(r), col = opt.color || COLORS[0];
+  const out = [];
+  out.push({ name: opt.label ? opt.label + ' BT' : 'BT', color: col, axis: 'T', width: 2.5, dots: true, pts: p.filter(x => x.bt != null).map(x => ({ x: x.t, y: +x.bt })) });
+  if (opt.et !== false) out.push({ name: opt.label ? opt.label + ' ET' : 'ET', color: opt.etColor || COLORS[1], axis: 'T', dash: opt.dash, pts: p.filter(x => x.et != null && x.et !== '').map(x => ({ x: x.t, y: +x.et })) });
+  if (opt.ror !== false) out.push({ name: opt.label ? opt.label + ' RoR' : 'RoR', color: opt.rorColor || COLORS[2], axis: 'R', dash: opt.dash || [], pts: rorSeries(p).map(x => ({ x: x.t, y: x.v })) });
+  return out;
+}
+function markersOf(r) {
+  const e = r.events || {}, mk = [];
+  EVENTS.forEach(ev => { if (e[ev.k] != null) mk.push({ x: e[ev.k], label: ev.name }); });
+  if (e.drop != null) mk.push({ x: e.drop, label: '배출', color: '#e5484d' });
+  return mk;
+}
+
+/* ============ 상태 / 라우팅 ============ */
+let view = 'home', param = null, cmpSel = [], cmpOpt = { et: false, ror: false };
+const TABS = [['home', '🏠', '홈'], ['roast', '🔥', '로스팅'], ['log', '📒', '기록'], ['green', '🫘', '생두'], ['compare', '📈', '비교'], ['data', '⚙️', '설정']];
+function go(v, p = null) { view = v; param = p; render(); window.scrollTo(0, 0); }
+function render() {
+  stopTick();
+  $('#nav').innerHTML = TABS.map(([k, ic, n]) => `<button class="${view === k || (view === 'detail' && k === 'log') ? 'on' : ''}" data-act="go" data-v="${k}"><span class="ic">${ic}</span>${n}</button>`).join('');
+  $('#livePill').classList.toggle('on', !!S.live);
+  const fn = { home: vHome, roast: vRoast, log: vLog, detail: vDetail, green: vGreen, compare: vCompare, data: vData }[view];
+  $('#app').innerHTML = '';
+  fn($('#app'));
+}
+$('#livePill').onclick = () => go('roast');
+
+/* ============ 홈 ============ */
+function vHome(el) {
+  const ym = today().slice(0, 7);
+  const mr = S.roasts.filter(r => (r.date || '').startsWith(ym));
+  const kg = mr.reduce((s, r) => s + (+r.batchG || 0), 0) / 1000;
+  const losses = S.roasts.map(r => metrics(r).loss).filter(x => x != null);
+  const avgLoss = losses.length ? losses.reduce((a, b) => a + b, 0) / losses.length : null;
+  const stock = S.greens.reduce((s, g) => s + Math.max(0, greenRemainG(g)), 0) / 1000;
+  const low = S.greens.filter(g => greenRemainG(g) / 1000 < S.settings.lowKg);
+  const recent = S.roasts.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id)).slice(0, 5);
+  el.innerHTML = `
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="stat"><div class="k">이번 달 로스팅</div><div class="v">${mr.length}<small> 회</small></div></div>
+      <div class="stat"><div class="k">이번 달 투입량</div><div class="v">${kg.toFixed(1)}<small> kg</small></div></div>
+      <div class="stat"><div class="k">평균 중량 손실</div><div class="v">${num(avgLoss)}<small> %</small></div></div>
+      <div class="stat"><div class="k">생두 재고</div><div class="v">${stock.toFixed(1)}<small> kg</small></div></div>
+    </div>
+    <button class="btn pri" style="width:100%;padding:14px;font-size:17px;margin-bottom:14px" data-act="go" data-v="roast">🔥 ${S.live ? '진행 중인 로스팅 보기' : '새 로스팅 시작'}</button>
+    ${low.length ? `<div class="card"><h3>⚠️ 재고 부족 (${S.settings.lowKg}kg 미만)</h3>${low.map(g => `<span class="tag warn">${esc(g.name)} · ${(greenRemainG(g) / 1000).toFixed(1)}kg</span>`).join('')}</div>` : ''}
+    <div class="card"><h3>최근 로스팅</h3>
+      ${recent.length ? recent.map(rItem).join('') : '<div class="empty">아직 기록이 없습니다.<br>설정 탭에서 샘플 데이터를 불러와 체험해 보세요.</div>'}
+    </div>`;
+}
+function rItem(r) {
+  const m = metrics(r), g = S.greens.find(x => x.id === r.greenId);
+  return `<div class="list-item" data-act="detail" data-id="${r.id}">
+    <div><div class="t">${esc(r.name)}</div><div class="s">${esc(r.date)} · ${g ? esc(g.name) : '생두 미지정'} · ${r.batchG || '-'}g${r.level ? ' · ' + esc(r.level) : ''}</div></div>
+    <div style="text-align:right"><div class="t">${fmtT(m.total)}</div><div class="s">DTR ${num(m.dtr)}% · 손실 ${num(m.loss)}%</div></div></div>`;
+}
+
+/* ============ 로스팅 (라이브) ============ */
+let tickId = null, beepAt = 0;
+function stopTick() { if (tickId) { clearInterval(tickId); tickId = null; } }
+const liveT = () => (Date.now() - S.live.startedAt) / 1000;
+
+function vRoast(el) {
+  if (!S.live) return vSetup(el);
+  const L = S.live, last = L.points[L.points.length - 1] || {};
+  el.innerHTML = `
+    <div class="card">
+      <div class="row sp"><div><div class="muted" style="font-size:12px">${esc(L.name)} · ${L.batchG}g</div><div class="timer" id="lvTimer">0:00</div></div>
+        <div style="text-align:right"><div class="muted" style="font-size:12px" id="lvPhase"></div>
+          <div class="big" style="color:var(--bt)" id="lvBT">-</div><div class="muted" style="font-size:12px">BT °C</div></div>
+        <div style="text-align:right"><div class="big" style="color:var(--ror)" id="lvRor">-</div><div class="muted" style="font-size:12px">RoR °C/분</div></div></div>
+    </div>
+    <div class="card">
+      <canvas class="chart" id="lvChart"></canvas>
+      <div class="readout" id="lvRead"></div>
+      <div class="legend"><span><i style="background:var(--bt)"></i>BT</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--ror)"></i>RoR</span>${L.refId ? '<span><i style="background:#888"></i>참고 곡선(점선)</span>' : ''}</div>
+    </div>
+    <div class="card">
+      <h3>온도 기록 <span class="muted" style="font-weight:400">— 값을 바꾸고 Enter. 시간은 자동 기록</span></h3>
+      <div class="row" style="flex-wrap:nowrap">
+        <div style="flex:1"><label>BT (원두 온도)</label><input id="inBT" type="number" step="0.1" inputmode="decimal" value="${last.bt ?? L.chargeTemp ?? ''}"></div>
+        <div style="flex:1"><label>ET (배기/드럼 온도)</label><input id="inET" type="number" step="0.1" inputmode="decimal" value="${last.et ?? ''}"></div>
+        <button class="btn pri" id="btnLog" style="align-self:flex-end">기록</button>
+      </div>
+      <div class="row" style="margin-top:10px;flex-wrap:nowrap">
+        <div style="flex:1"><label>화력</label><input id="inFire" placeholder="예: 5 → 4" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].fire : '')}"></div>
+        <div style="flex:1"><label>댐퍼/풍량</label><input id="inAir" placeholder="예: 3" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].air : '')}"></div>
+        <button class="btn" id="btnCtl" style="align-self:flex-end">변경 기록</button>
+      </div>
+      <div id="ctlList" class="muted" style="font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h3>이벤트</h3>
+      <div class="ev-grid" id="evGrid"></div>
+    </div>
+    <div class="row">
+      <button class="btn dan" id="btnDrop" style="flex:2;padding:14px;font-size:17px">⏹ 배출 (로스팅 종료)</button>
+      <button class="btn" id="btnCancel" style="flex:1">취소</button>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>알림</h3>
+      <div class="row"><label style="margin:0">온도 입력 알림음</label>
+        <select id="selBeep" style="width:auto"><option value="0">끄기</option><option value="30">30초마다</option><option value="60">60초마다</option></select></div></div>`;
+  $('#selBeep').value = S.settings.beepSec;
+  $('#selBeep').onchange = e => { S.settings.beepSec = +e.target.value; save(); beepAt = Math.floor(liveT() / (S.settings.beepSec || 1)) + 1; };
+  const ref = L.refId ? S.roasts.find(r => r.id === L.refId) : null;
+  const cv = $('#lvChart');
+  const lvSeries = () => {
+    const rr = { chargeTemp: L.chargeTemp, points: L.points };
+    const s = seriesOf(rr);
+    if (ref) s.push(...seriesOf(ref, { color: '#888', etColor: '#667', rorColor: '#6a7', dash: [5, 4], et: false, label: '참고' }));
+    return s;
+  };
+  attachReadout(cv, $('#lvRead'), lvSeries);
+  const refresh = () => {
+    const t = liveT();
+    $('#lvTimer').textContent = fmtT(t);
+    const ph = L.events.fc != null ? '디벨롭먼트' : L.events.dry != null ? '메일라드' : '건조';
+    $('#lvPhase').textContent = L.events.fc != null ? ph + ' ' + fmtT(t - L.events.fc) : ph;
+    const lp = L.points[L.points.length - 1];
+    $('#lvBT').textContent = lp && lp.bt != null ? (+lp.bt).toFixed(1) : '-';
+    const ror = rorSeries(ptsOf({ chargeTemp: L.chargeTemp, points: L.points }));
+    $('#lvRor').textContent = ror.length ? ror[ror.length - 1].v.toFixed(1) : '-';
+    const mk = []; EVENTS.forEach(ev => { if (L.events[ev.k] != null) mk.push({ x: L.events[ev.k], label: ev.name }); });
+    const o = { series: lvSeries(), markers: mk, xmax: Math.max(t, 600) + 30, now: t };
+    // 참고 곡선의 이벤트도 표시
+    if (ref) markersOf(ref).forEach(m => mk.push({ x: m.x, label: '', color: '#555' }));
+    drawChart(cv, o);
+    if (S.settings.beepSec) {
+      const n = Math.floor(t / S.settings.beepSec);
+      if (n >= beepAt && t > 1) { beepAt = n + 1; beep(); }
+    }
+  };
+  const renderEv = () => {
+    $('#evGrid').innerHTML = EVENTS.map(ev => {
+      const t = L.events[ev.k];
+      return `<button class="btn ${t != null ? 'done' : ''}" data-ev="${ev.k}">${ev.name}<small>${t != null ? fmtT(t) + ' · ' + num(btAt(ptsOf({ chargeTemp: L.chargeTemp, points: L.points }), t)) + '°C' : (ev.sub || '탭하여 기록')}</small></button>`;
+    }).join('');
+    $('#ctlList').innerHTML = L.controls.length ? '화력/풍량: ' + L.controls.map(c => `${fmtT(c.t)} (화력 ${esc(c.fire || '-')} / 풍량 ${esc(c.air || '-')})`).join(' · ') : '';
+    $('#evGrid').querySelectorAll('[data-ev]').forEach(b => b.onclick = () => {
+      const k = b.dataset.ev;
+      L.events[k] = L.events[k] != null ? null : Math.round(liveT());
+      if (L.events[k] == null) delete L.events[k];
+      save(); renderEv(); refresh();
+    });
+  };
+  const logPoint = () => {
+    const bt = $('#inBT').value, et = $('#inET').value;
+    if (bt === '' && et === '') return;
+    L.points.push({ t: Math.round(liveT()), bt: bt === '' ? null : +bt, et: et === '' ? null : +et });
+    save(); refresh(); $('#inBT').select();
+  };
+  $('#btnLog').onclick = logPoint;
+  ['inBT', 'inET'].forEach(id => $('#' + id).addEventListener('keydown', e => { if (e.key === 'Enter') logPoint(); }));
+  $('#btnCtl').onclick = () => {
+    L.controls.push({ t: Math.round(liveT()), fire: $('#inFire').value, air: $('#inAir').value });
+    save(); renderEv(); toast('기록됨');
+  };
+  $('#btnCancel').onclick = () => { if (confirm('진행 중인 로스팅을 기록 없이 취소할까요?')) { S.live = null; save(); go('roast'); } };
+  $('#btnDrop').onclick = () => {
+    const bt = $('#inBT').value, et = $('#inET').value;
+    const t = Math.round(liveT());
+    if (bt !== '') L.points.push({ t, bt: +bt, et: et === '' ? null : +et });
+    L.events.drop = t; save(); finishModal();
+  };
+  renderEv(); refresh();
+  tickId = setInterval(refresh, 1000);
+}
+function beep() {
+  try {
+    const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain();
+    o.connect(g); g.connect(a.destination); o.frequency.value = 880; g.gain.value = .15; o.start(); o.stop(a.currentTime + .18);
+    if (navigator.vibrate) navigator.vibrate(120);
+  } catch (e) {}
+}
+
+function greenOptions(sel) {
+  return '<option value="">(생두 미지정)</option>' + S.greens.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)} — 잔량 ${(greenRemainG(g) / 1000).toFixed(1)}kg</option>`).join('');
+}
+function vSetup(el, pre = {}) {
+  const roasts = S.roasts.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+  el.innerHTML = `
+    <h2>새 로스팅</h2>
+    <form class="card" data-form="start">
+      <div class="field"><label>로스팅 이름 *</label><input name="name" required placeholder="예: 에티오피아 예가체프 #3" value="${esc(pre.name || '')}"></div>
+      <div class="field"><label>생두</label><select name="greenId">${greenOptions(pre.greenId)}</select></div>
+      <div class="grid g3">
+        <div class="field"><label>투입량 (g) *</label><input name="batchG" type="number" required min="1" step="1" inputmode="numeric" value="${pre.batchG || ''}"></div>
+        <div class="field"><label>투입 온도 (°C)</label><input name="chargeTemp" type="number" step="0.1" inputmode="decimal" value="${pre.chargeTemp || ''}"></div>
+        <div class="field"><label>실내 온도 (°C)</label><input name="ambient" type="number" step="0.1" inputmode="decimal"></div>
+      </div>
+      <div class="grid g2">
+        <div class="field"><label>목표 로스트 단계</label><select name="level">${LEVELS.map(l => `<option ${pre.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+        <div class="field"><label>참고 곡선 (겹쳐서 보기)</label><select name="refId"><option value="">없음</option>${roasts.map(r => `<option value="${r.id}" ${pre.refId === r.id ? 'selected' : ''}>${esc(r.date)} · ${esc(r.name)}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>로스터기 / 메모</label><input name="roaster" placeholder="예: 1kg 직화" value="${esc(pre.roaster ?? S.settings.roaster)}"></div>
+      <button class="btn pri" style="width:100%;padding:14px;font-size:17px">🔥 투입 — 타이머 시작</button>
+    </form>
+    <button class="btn" style="width:100%" data-act="manual">✍️ 과거 로스팅 수동 입력</button>`;
+}
+function startRoast(f) {
+  S.settings.roaster = f.roaster || '';
+  S.live = {
+    name: f.name, greenId: f.greenId || '', batchG: +f.batchG, chargeTemp: f.chargeTemp === '' ? null : +f.chargeTemp,
+    ambient: f.ambient === '' ? null : +f.ambient, level: f.level, refId: f.refId, roaster: f.roaster,
+    startedAt: Date.now(), date: today(), points: [], events: {}, controls: []
+  };
+  beepAt = 1; save(); go('roast');
+}
+
+/* 종료 후 메타 입력 / 수정 공용 */
+function metaFields(r) {
+  const c = r.cup || {};
+  return `
+    <div class="grid g2">
+      <div class="field"><label>투입량 (g)</label><input name="batchG" type="number" step="1" value="${r.batchG ?? ''}"></div>
+      <div class="field"><label>배출 후 무게 (g) *</label><input name="roastedG" type="number" step="0.1" inputmode="decimal" value="${r.roastedG ?? ''}" ${r._finish ? 'autofocus' : ''}></div>
+      <div class="field"><label>Agtron / 색도 (선택)</label><input name="agtron" type="number" step="0.1" value="${r.agtron ?? ''}"></div>
+      <div class="field"><label>로스트 단계</label><select name="level">${LEVELS.map(l => `<option ${r.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>로스팅 메모 (향, 외관, 특이사항)</label><textarea name="notes">${esc(r.notes || '')}</textarea></div>
+    <div class="grid g2">
+      <div class="field"><label>컵핑 점수 (0~100)</label><input name="cupScore" type="number" min="0" max="100" step="0.25" value="${c.score ?? ''}"></div>
+      <div class="field"><label>컵핑 노트</label><input name="cupNotes" placeholder="플로럴, 베리, 밝은 산미…" value="${esc(c.notes || '')}"></div>
+    </div>`;
+}
+function readMeta(f, r) {
+  r.batchG = +f.batchG || r.batchG;
+  r.roastedG = f.roastedG === '' ? null : +f.roastedG;
+  r.agtron = f.agtron === '' ? null : +f.agtron;
+  r.level = f.level; r.notes = f.notes;
+  r.cup = { score: f.cupScore === '' ? null : +f.cupScore, notes: f.cupNotes };
+}
+function finishModal() {
+  const L = S.live;
+  modal(`<h2>로스팅 완료 — 배출 ${fmtT(L.events.drop)}</h2>
+    <form data-form="finish">${metaFields({ batchG: L.batchG, level: L.level, _finish: true })}
+    <div class="row"><button class="btn pri" style="flex:1">저장</button><button type="button" class="btn" data-act="closeModal">나중에</button></div></form>`);
+}
+function saveLive(f) {
+  const L = S.live;
+  const r = { id: uid(), name: L.name, date: L.date, greenId: L.greenId, batchG: L.batchG, chargeTemp: L.chargeTemp, ambient: L.ambient, roaster: L.roaster, points: L.points, events: L.events, controls: L.controls };
+  readMeta(f, r);
+  S.roasts.push(r); S.live = null; save(); closeModal(); toast('저장되었습니다'); go('detail', r.id);
+}
+
+/* 수동 입력 */
+function manualModal() {
+  modal(`<h2>과거 로스팅 수동 입력</h2>
+    <form data-form="manual">
+      <div class="field"><label>이름 *</label><input name="name" required></div>
+      <div class="grid g2">
+        <div class="field"><label>날짜</label><input name="date" type="date" value="${today()}"></div>
+        <div class="field"><label>생두</label><select name="greenId">${greenOptions('')}</select></div>
+        <div class="field"><label>투입 온도 (°C)</label><input name="chargeTemp" type="number" step="0.1"></div>
+      </div>
+      <div class="grid g3">
+        <div class="field"><label>건조 종료 (m:ss)</label><input name="dry" placeholder="4:30"></div>
+        <div class="field"><label>1차 크랙 (m:ss)</label><input name="fc" placeholder="8:40"></div>
+        <div class="field"><label>1차 크랙 종료</label><input name="fce"></div>
+        <div class="field"><label>2차 크랙</label><input name="sc"></div>
+        <div class="field"><label>배출 (m:ss) *</label><input name="drop" required placeholder="10:15"></div>
+      </div>
+      <div class="field"><label>온도 로그 (한 줄에 "시간 BT ET", ET는 생략 가능)</label>
+        <textarea name="pts" placeholder="1:00 85 190&#10;2:00 110 200&#10;3:00 135 205"></textarea></div>
+      ${metaFields({})}
+      <div class="row"><button class="btn pri" style="flex:1">저장</button><button type="button" class="btn" data-act="closeModal">취소</button></div>
+    </form>`);
+}
+function saveManual(f) {
+  const ev = {};
+  ['dry', 'fc', 'fce', 'sc', 'drop'].forEach(k => { const v = parseT(f[k]); if (v != null) ev[k] = v; });
+  const points = [];
+  (f.pts || '').split('\n').forEach(line => {
+    const a = line.trim().split(/[\s,]+/); if (a.length < 2) return;
+    const t = parseT(a[0]), bt = parseFloat(a[1]), et = a[2] !== undefined ? parseFloat(a[2]) : null;
+    if (t != null && !isNaN(bt)) points.push({ t, bt, et: isNaN(et) ? null : et });
+  });
+  const r = { id: uid(), name: f.name, date: f.date || today(), greenId: f.greenId, chargeTemp: f.chargeTemp === '' ? null : +f.chargeTemp, points, events: ev, controls: [] };
+  readMeta(f, r);
+  S.roasts.push(r); save(); closeModal(); go('detail', r.id);
+}
+
+/* ============ 기록 ============ */
+let logQ = '';
+function vLog(el) {
+  el.innerHTML = `<h2>로스팅 기록</h2>
+    <input id="logQ" placeholder="검색: 이름, 생두, 메모…" value="${esc(logQ)}" style="margin-bottom:12px">
+    <div class="card" id="logList"></div>`;
+  const draw = () => {
+    const q = logQ.toLowerCase();
+    const list = S.roasts.filter(r => {
+      const g = S.greens.find(x => x.id === r.greenId);
+      return !q || [r.name, r.notes, r.date, r.level, g && g.name, g && g.origin].join(' ').toLowerCase().includes(q);
+    }).sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+    $('#logList').innerHTML = list.length ? list.map(rItem).join('') : '<div class="empty">기록이 없습니다.</div>';
+  };
+  $('#logQ').oninput = e => { logQ = e.target.value; draw(); };
+  draw();
+}
+
+/* ============ 상세 ============ */
+function vDetail(el) {
+  const r = S.roasts.find(x => x.id === param);
+  if (!r) return go('log');
+  const m = metrics(r), g = S.greens.find(x => x.id === r.greenId);
+  const cost = (g && g.price && r.batchG) ? g.price * r.batchG / 1000 : null;
+  const costPerKg = (cost != null && r.roastedG) ? cost / (r.roastedG / 1000) : null;
+  const pct = v => v == null ? 0 : Math.max(0, v);
+  el.innerHTML = `
+    <div class="row sp noprint" style="margin-bottom:8px"><button class="btn sm" data-act="go" data-v="log">← 목록</button>
+      <div class="row"><button class="btn sm" data-act="print">🖨 인쇄/PDF</button><button class="btn sm" data-act="edit" data-id="${r.id}">✏️ 수정</button><button class="btn sm dan" data-act="del" data-id="${r.id}">삭제</button></div></div>
+    <h2 style="margin-bottom:2px">${esc(r.name)}</h2>
+    <div class="muted" style="margin-bottom:12px">${esc(r.date)} · ${g ? esc(g.name) + (g.origin ? ' (' + esc(g.origin) + ')' : '') : '생두 미지정'} · ${esc(r.roaster || '')}</div>
+    <div class="grid g4" style="margin-bottom:14px">
+      <div class="stat"><div class="k">총 시간</div><div class="v">${fmtT(m.total)}</div></div>
+      <div class="stat"><div class="k">DTR</div><div class="v">${num(m.dtr)}<small> %</small></div></div>
+      <div class="stat"><div class="k">중량 손실</div><div class="v">${num(m.loss)}<small> %</small></div></div>
+      <div class="stat"><div class="k">배출 온도</div><div class="v">${num(m.dropTemp)}<small> °C</small></div></div>
+    </div>
+    <div class="card">
+      <canvas class="chart" id="dChart"></canvas>
+      <div class="readout" id="dRead"></div>
+      <div class="legend"><span><i style="background:var(--bt)"></i>BT</span><span><i style="background:var(--et)"></i>ET</span><span><i style="background:var(--ror)"></i>RoR</span></div>
+    </div>
+    <div class="card"><h3>단계 구성</h3>
+      <div class="phase"><span style="width:${pct(m.dryPct)}%;background:#d9b84a"></span><span style="width:${pct(m.maiPct)}%;background:#c1622d"></span><span style="width:${pct(m.dtr)}%;background:#6b3a1e"></span></div>
+      <div class="grid g3" style="font-size:13px">
+        <div><span style="color:#d9b84a">■</span> 건조 ${fmtT(m.dry)} (${num(m.dryPct, 0)}%)</div>
+        <div><span style="color:#c1622d">■</span> 메일라드 ${fmtT(m.maillard)} (${num(m.maiPct, 0)}%)</div>
+        <div><span style="color:#8b4a26">■</span> 디벨롭 ${fmtT(m.dev)} (${num(m.dtr, 0)}%)</div></div>
+    </div>
+    <div class="grid g2">
+      <div class="card"><h3>주요 지점</h3><table>
+        <tr><th>이벤트</th><th>시간</th><th>BT</th></tr>
+        <tr><td>투입</td><td>0:00</td><td>${num(r.chargeTemp)}</td></tr>
+        ${EVENTS.map(ev => (r.events || {})[ev.k] != null ? `<tr><td>${ev.name}</td><td>${fmtT(r.events[ev.k])}</td><td>${num(btAt(ptsOf(r), r.events[ev.k]))}</td></tr>` : '').join('')}
+        <tr><td>배출</td><td>${fmtT(m.total)}</td><td>${num(m.dropTemp)}</td></tr>
+        ${m.rorFc != null ? `<tr><td>1차 크랙 직전 RoR</td><td></td><td>${num(m.rorFc)}</td></tr>` : ''}
+      </table></div>
+      <div class="card"><h3>무게 · 원가</h3><table>
+        <tr><td>투입량</td><td>${r.batchG ?? '-'} g</td></tr>
+        <tr><td>배출 후</td><td>${r.roastedG ?? '-'} g</td></tr>
+        <tr><td>로스트 단계</td><td>${esc(r.level || '-')}</td></tr>
+        <tr><td>Agtron</td><td>${r.agtron ?? '-'}</td></tr>
+        <tr><td>실내 온도</td><td>${r.ambient != null ? r.ambient + ' °C' : '-'}</td></tr>
+        <tr><td>생두 원가</td><td>${cost != null ? Math.round(cost).toLocaleString() + ' 원' : '-'}</td></tr>
+        <tr><td>볶은 원두 1kg 원가</td><td>${costPerKg != null ? Math.round(costPerKg).toLocaleString() + ' 원' : '-'}</td></tr>
+      </table></div>
+    </div>
+    ${(r.controls || []).length ? `<div class="card"><h3>화력 / 풍량 변경</h3><div class="muted">${r.controls.map(c => `${fmtT(c.t)} 화력 ${esc(c.fire || '-')} / 풍량 ${esc(c.air || '-')}`).join(' · ')}</div></div>` : ''}
+    <div class="card"><h3>메모 · 컵핑</h3>
+      <p style="white-space:pre-wrap;margin:0 0 8px">${esc(r.notes || '메모 없음')}</p>
+      <div>컵핑: <b>${r.cup && r.cup.score != null ? r.cup.score + '점' : '-'}</b> ${r.cup && r.cup.notes ? '— ' + esc(r.cup.notes) : ''}</div></div>
+    <button class="btn pri noprint" style="width:100%" data-act="again" data-id="${r.id}">🔁 이 로스팅을 참고 곡선으로 새 로스팅 시작</button>`;
+  const cv = $('#dChart');
+  const getS = () => seriesOf(r);
+  const redraw = () => drawChart(cv, { series: getS(), markers: markersOf(r), xmax: (m.total || 600) + 20 });
+  attachReadout(cv, $('#dRead'), getS);
+  redraw(); window.onresize = redraw;
+}
+
+/* ============ 생두 ============ */
+function vGreen(el) {
+  el.innerHTML = `<div class="row sp"><h2>생두 재고</h2><button class="btn pri" data-act="greenForm">+ 생두 추가</button></div>
+    <div class="card">${S.greens.length ? S.greens.map(g => {
+      const rem = greenRemainG(g) / 1000, low = rem < S.settings.lowKg;
+      return `<div class="list-item" data-act="greenForm" data-id="${g.id}">
+        <div><div class="t">${esc(g.name)}</div><div class="s">${esc([g.origin, g.process, g.supplier].filter(Boolean).join(' · '))}${g.price ? ' · ' + (+g.price).toLocaleString() + '원/kg' : ''}</div></div>
+        <div style="text-align:right"><div class="t ${low ? '' : ''}" style="${low ? 'color:var(--danger)' : ''}">${rem.toFixed(2)} kg</div><div class="s">입고 ${g.kg}kg</div></div></div>`;
+    }).join('') : '<div class="empty">등록된 생두가 없습니다.</div>'}</div>`;
+}
+function greenForm(id) {
+  const g = S.greens.find(x => x.id === id) || {};
+  modal(`<h2>${id ? '생두 수정' : '생두 추가'}</h2>
+    <form data-form="green" data-id="${id || ''}">
+      <div class="field"><label>이름 *</label><input name="name" required value="${esc(g.name || '')}" placeholder="예: 에티오피아 구지 우라가 G1"></div>
+      <div class="grid g2">
+        <div class="field"><label>산지</label><input name="origin" value="${esc(g.origin || '')}"></div>
+        <div class="field"><label>가공</label><input name="process" value="${esc(g.process || '')}" placeholder="워시드/내추럴…"></div>
+        <div class="field"><label>공급처</label><input name="supplier" value="${esc(g.supplier || '')}"></div>
+        <div class="field"><label>입고일</label><input name="date" type="date" value="${g.date || today()}"></div>
+        <div class="field"><label>입고량 (kg) *</label><input name="kg" type="number" step="0.1" required value="${g.kg ?? ''}"></div>
+        <div class="field"><label>매입 단가 (원/kg)</label><input name="price" type="number" step="1" value="${g.price ?? ''}"></div>
+      </div>
+      <div class="field"><label>메모 (고도, 품종, 수확연도 등)</label><textarea name="notes">${esc(g.notes || '')}</textarea></div>
+      <div class="row"><button class="btn pri" style="flex:1">저장</button>
+        ${id ? '<button type="button" class="btn dan" data-act="delGreen" data-id="' + id + '">삭제</button>' : ''}
+        <button type="button" class="btn" data-act="closeModal">취소</button></div>
+    </form>`);
+}
+
+/* ============ 비교 ============ */
+function vCompare(el) {
+  const roasts = S.roasts.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
+  cmpSel = cmpSel.filter(id => S.roasts.some(r => r.id === id));
+  el.innerHTML = `<h2>로스팅 비교</h2>
+    <div class="card"><h3>비교할 로스팅 선택 (최대 4개)</h3>
+      <div style="max-height:220px;overflow-y:auto">${roasts.length ? roasts.map(r => {
+        const i = cmpSel.indexOf(r.id);
+        return `<label class="chk" style="font-size:14px;color:var(--text);margin:0"><input type="checkbox" data-cmp="${r.id}" ${i >= 0 ? 'checked' : ''}>${i >= 0 ? `<i style="background:${COLORS[i]}"></i>` : ''}${esc(r.date)} · ${esc(r.name)}</label>`;
+      }).join('') : '<div class="empty">기록이 없습니다.</div>'}</div>
+      <div class="row" style="margin-top:8px"><label class="row" style="margin:0"><input type="checkbox" id="cmpEt" style="width:auto" ${cmpOpt.et ? 'checked' : ''}> ET 표시</label>
+        <label class="row" style="margin:0"><input type="checkbox" id="cmpRor" style="width:auto" ${cmpOpt.ror ? 'checked' : ''}> RoR 표시</label></div></div>
+    <div id="cmpBody"></div>`;
+  el.querySelectorAll('[data-cmp]').forEach(cb => cb.onchange = () => {
+    const id = cb.dataset.cmp;
+    if (cb.checked) { if (cmpSel.length >= 4) { cb.checked = false; return toast('최대 4개까지 선택할 수 있어요'); } cmpSel.push(id); }
+    else cmpSel = cmpSel.filter(x => x !== id);
+    render();
+  });
+  $('#cmpEt').onchange = e => { cmpOpt.et = e.target.checked; render(); };
+  $('#cmpRor').onchange = e => { cmpOpt.ror = e.target.checked; render(); };
+  if (!cmpSel.length) return;
+  const rs = cmpSel.map(id => S.roasts.find(r => r.id === id));
+  const getS = () => rs.flatMap((r, i) => seriesOf(r, { color: COLORS[i], etColor: COLORS[i], rorColor: COLORS[i], et: cmpOpt.et, ror: cmpOpt.ror, dash: undefined, label: String(i + 1) })
+    .map(s => s.name.endsWith('ET') ? { ...s, dash: [2, 3], width: 1.5 } : s.name.endsWith('RoR') ? { ...s, dash: [6, 3], width: 1.5 } : s));
+  $('#cmpBody').innerHTML = `<div class="card"><canvas class="chart" id="cChart"></canvas><div class="readout" id="cRead"></div>
+    <div class="legend">${rs.map((r, i) => `<span><i style="background:${COLORS[i]}"></i>${i + 1}. ${esc(r.name)}</span>`).join('')}<span>실선 BT · 점선 ET/RoR</span></div></div>
+    <div class="card scroll-x"><table><tr><th></th>${rs.map((r, i) => `<th style="color:${COLORS[i]}">${i + 1}</th>`).join('')}</tr>
+    ${[['총 시간', m => fmtT(m.total)], ['건조 종료', m => fmtT(m.dry)], ['1차 크랙', m => fmtT(m.fc)], ['디벨롭 시간', m => fmtT(m.dev)], ['DTR %', m => num(m.dtr)], ['중량 손실 %', m => num(m.loss)], ['배출 온도', m => num(m.dropTemp)]]
+        .map(([n, f]) => `<tr><td>${n}</td>${rs.map(r => `<td>${f(metrics(r))}</td>`).join('')}</tr>`).join('')}
+    <tr><td>컵핑</td>${rs.map(r => `<td>${r.cup && r.cup.score != null ? r.cup.score : '-'}</td>`).join('')}</tr></table></div>`;
+  const cv = $('#cChart');
+  const redraw = () => drawChart(cv, { series: getS(), markers: [], xmax: Math.max(...rs.map(r => metrics(r).total || 0)) + 20 });
+  attachReadout(cv, $('#cRead'), getS); redraw(); window.onresize = redraw;
+}
+
+/* ============ 설정 / 백업 ============ */
+function vData(el) {
+  el.innerHTML = `<h2>설정 · 백업</h2>
+    <div class="card"><h3>기본 설정</h3>
+      <div class="field"><label>재고 부족 기준 (kg)</label><input id="setLow" type="number" step="0.5" value="${S.settings.lowKg}"></div></div>
+    <div class="card"><h3>데이터 백업 · 복원</h3>
+      <p class="muted" style="margin-top:0;font-size:13px">데이터는 이 기기의 브라우저에 저장됩니다. 주기적으로 백업 파일을 받아두세요. 휴대폰↔PC 이동은 백업/복원으로 합니다.</p>
+      <div class="row"><button class="btn" data-act="expJson">JSON 백업 받기</button><button class="btn" data-act="expCsv">CSV 내보내기 (엑셀)</button>
+        <label class="btn" style="margin:0;display:inline-block">복원<input type="file" id="impFile" accept=".json" hidden></label></div></div>
+    <div class="card"><h3>샘플 / 초기화</h3>
+      <div class="row"><button class="btn" data-act="sample">샘플 데이터 불러오기</button><button class="btn dan" data-act="wipe">전체 삭제</button></div></div>`;
+  $('#setLow').onchange = e => { S.settings.lowKg = +e.target.value || 0; save(); toast('저장됨'); };
+  $('#impFile').onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      try { const d = JSON.parse(rd.result); if (!d.roasts) throw 0; if (!confirm('현재 데이터를 백업 파일로 덮어쓸까요?')) return; S = Object.assign(fresh(), d); save(); toast('복원 완료'); go('home'); }
+      catch (err) { toast('올바른 백업 파일이 아닙니다'); }
+    };
+    rd.readAsText(f);
+  };
+}
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function exportCsv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const head = ['날짜', '이름', '생두', '투입g', '배출g', '손실%', '총시간', '건조종료', '1차크랙', '디벨롭', 'DTR%', '배출온도', '단계', '컵핑', '메모'];
+  const rows = S.roasts.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => {
+    const m = metrics(r), g = S.greens.find(x => x.id === r.greenId);
+    return [r.date, r.name, g ? g.name : '', r.batchG, r.roastedG, num(m.loss, 2), fmtT(m.total), fmtT(m.dry), fmtT(m.fc), fmtT(m.dev), num(m.dtr, 2), num(m.dropTemp), r.level, r.cup && r.cup.score, r.notes].map(q).join(',');
+  });
+  download('roast-log.csv', '﻿' + [head.map(q).join(','), ...rows].join('\n'), 'text/csv');
+}
+function loadSample() {
+  const g = { id: uid(), name: '에티오피아 예가체프 G1 (샘플)', origin: '에티오피아', process: '워시드', supplier: '샘플상사', kg: 20, price: 14500, date: today() };
+  S.greens.push(g);
+  const mk = (name, off, dropT, fcT, dryT) => {
+    const pts = []; let bt = 95;
+    for (let t = 60; t <= dropT; t += 30) {
+      const f = t / dropT;
+      bt = 85 + 125 * (1 - Math.exp(-3.2 * f)) + off * f;
+      pts.push({ t, bt: Math.round(bt * 10) / 10, et: Math.round((200 + 25 * f) * 10) / 10 });
+    }
+    const d = new Date(); d.setDate(d.getDate() - Math.round(off / 3));
+    return { id: uid(), name, date: d.toISOString().slice(0, 10), greenId: g.id, batchG: 1000, roastedG: 845 + Math.round(off), chargeTemp: 200, level: '라이트 미디엄', roaster: '샘플 로스터', points: pts, events: { dry: dryT, fc: fcT, fce: fcT + 70, drop: dropT }, controls: [], cup: { score: 84 + off / 6, notes: '플로럴, 복숭아, 밝은 산미' }, notes: '샘플 데이터입니다.' };
+  };
+  S.roasts.push(mk('예가체프 #1 (샘플)', 0, 570, 480, 270), mk('예가체프 #2 (샘플)', 6, 600, 495, 285), mk('예가체프 #3 (샘플)', 12, 630, 500, 290));
+  save(); toast('샘플을 불러왔어요'); go('home');
+}
+
+/* ============ 모달 ============ */
+function modal(html) {
+  $('#modalRoot').innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
+  const first = $('#modalRoot [autofocus]'); if (first) first.focus();
+}
+function closeModal() { $('#modalRoot').innerHTML = ''; }
+
+/* ============ 이벤트 위임 ============ */
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const a = t.dataset.act, id = t.dataset.id;
+  switch (a) {
+    case 'go': go(t.dataset.v); break;
+    case 'detail': go('detail', id); break;
+    case 'closeModal': closeModal(); break;
+    case 'manual': manualModal(); break;
+    case 'greenForm': greenForm(id); break;
+    case 'print': window.print(); break;
+    case 'edit': {
+      const r = S.roasts.find(x => x.id === id);
+      modal(`<h2>수정 — ${esc(r.name)}</h2><form data-form="edit" data-id="${id}">
+        <div class="field"><label>이름</label><input name="name" value="${esc(r.name)}"></div>
+        ${metaFields(r)}<div class="row"><button class="btn pri" style="flex:1">저장</button><button type="button" class="btn" data-act="closeModal">취소</button></div></form>`);
+      break;
+    }
+    case 'del':
+      if (confirm('이 로스팅 기록을 삭제할까요? (생두 재고가 복구됩니다)')) { S.roasts = S.roasts.filter(r => r.id !== id); save(); go('log'); }
+      break;
+    case 'delGreen':
+      if (S.roasts.some(r => r.greenId === id) && !confirm('이 생두로 로스팅한 기록이 있습니다. 그래도 삭제할까요?')) break;
+      if (confirm('생두를 삭제할까요?')) { S.greens = S.greens.filter(g => g.id !== id); save(); closeModal(); render(); }
+      break;
+    case 'again': {
+      const r = S.roasts.find(x => x.id === id);
+      if (S.live) return toast('이미 진행 중인 로스팅이 있어요');
+      view = 'roast'; render(); vSetup($('#app'), { name: r.name.replace(/\s*#\d+.*$/, '') + ' (재로스팅)', greenId: r.greenId, batchG: r.batchG, chargeTemp: r.chargeTemp, level: r.level, refId: r.id });
+      window.scrollTo(0, 0);
+      break;
+    }
+    case 'expJson': download('roastlog-backup-' + today() + '.json', JSON.stringify(S, null, 1), 'application/json'); break;
+    case 'expCsv': exportCsv(); break;
+    case 'sample': loadSample(); break;
+    case 'wipe': if (confirm('모든 기록과 생두 데이터를 삭제합니다. 계속할까요?') && confirm('정말 삭제할까요? 되돌릴 수 없습니다.')) { S = fresh(); save(); go('home'); } break;
+  }
+});
+document.addEventListener('submit', e => {
+  const form = e.target.closest('[data-form]'); if (!form) return;
+  e.preventDefault();
+  const f = Object.fromEntries(new FormData(form).entries());
+  switch (form.dataset.form) {
+    case 'start': startRoast(f); break;
+    case 'finish': saveLive(f); break;
+    case 'manual': saveManual(f); break;
+    case 'edit': { const r = S.roasts.find(x => x.id === form.dataset.id); r.name = f.name || r.name; readMeta(f, r); save(); closeModal(); render(); break; }
+    case 'green': {
+      const id = form.dataset.id, g = S.greens.find(x => x.id === id) || { id: uid() };
+      Object.assign(g, { name: f.name, origin: f.origin, process: f.process, supplier: f.supplier, date: f.date, kg: +f.kg, price: f.price === '' ? null : +f.price, notes: f.notes });
+      if (!id) S.greens.push(g);
+      save(); closeModal(); render(); break;
+    }
+  }
+});
+window.addEventListener('resize', () => { if (view === 'roast' && S.live) return; });
+render();
+</script>
+</body>
+</html>
