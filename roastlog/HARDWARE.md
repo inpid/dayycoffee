@@ -1,4 +1,4 @@
-# STANDARD ROAST (스탠다드로스트) — 로스팅 머신 ↔ 노트북 연결
+# TAAS — 로스팅 머신 ↔ 노트북 연결
 
 1. 노트북 **Chrome 또는 Edge**에서 `roastlog/index.html` 열기 (Safari/Firefox는 USB 연결 불가)
 2. 로스팅 탭 → **USB 시리얼 연결** → 장치 선택
