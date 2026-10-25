@@ -126,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, theme: '', proto: 'modbus', parity: 'none', mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
@@ -167,11 +167,11 @@ function ptsOf(r) { // BT/ET 포인트 (투입 시점 포함)
   if (r.chargeTemp != null && r.chargeTemp !== '' && (!p.length || p[0].t > 0)) p.unshift({ t: 0, bt: +r.chargeTemp, et: null });
   return p;
 }
-function rorSeries(p, win = 30) { // [{t, v}] °C/분
+function rorSeries(p, win = +(S.settings.rorWin) || 60) { // [{t, v}] °C/분
   const bt = p.filter(x => x.bt != null && !isNaN(x.bt) && x.t > 0); // 투입 시점(t=0)은 RoR 계산 제외
   const raw = [];
   for (let i = 0; i < bt.length; i++) {
-    if (bt[i].t < 60) continue;
+    if (bt[i].t < Math.min(win, 60)) continue;
     let j = -1;
     for (let k = i - 1; k >= 0; k--) if (bt[i].t - bt[k].t >= win - 5) { j = k; break; }
     if (j < 0) continue;
@@ -206,7 +206,12 @@ function metrics(r) {
   m.fcTemp = btAt(p, e.fc);
   m.dryTemp = btAt(p, e.dry);
   const ror = rorSeries(p);
+  m.tpTemp = btAt(p, e.tp);
   m.rorFc = e.fc != null ? (ror.filter(x => x.t <= e.fc).pop() || {}).v ?? null : null;
+  const pre = ror.filter(x => (e.tp == null || x.t >= e.tp) && (e.fc == null || x.t <= e.fc));
+  m.maxRor = pre.length ? Math.max(...pre.map(x => x.v)) : null;
+  const aft = e.fc != null ? ror.filter(x => x.t > e.fc && x.t <= e.fc + 60) : [];
+  m.fcDrop = (m.rorFc != null && aft.length) ? m.rorFc - Math.min(...aft.map(x => x.v)) : null;
   return m;
 }
 function greenRemainG(g) {
@@ -471,7 +476,7 @@ function chargeWatch() { // 투입 자동 감지: BT가 8초 안에 10°C 이상
   const cb = $('#autoCharge'); if (!cb || !cb.checked) return;
   const win = DAQ.hist.filter(x => DAQ.ts - x.ts <= 8000 && x.bt != null); if (win.length < 4) return;
   const peak = Math.max(...win.map(x => x.bt));
-  if (peak >= 120 && peak - DAQ.bt >= 10) {
+  if (peak >= 120 && peak - DAQ.bt >= 7) {
     const pk = win.find(x => x.bt >= peak - 1), form = $('form[data-form=start]');
     const f = Object.fromEntries(new FormData(form).entries());
     f.name = f.name || today() + ' 로스팅'; if (f.chargeTemp === '') f.chargeTemp = peak.toFixed(1);
@@ -503,7 +508,8 @@ function daqPanel() {
         <div><label>BT/ET 채널 서로 바꾸기</label><label class="row" style="margin:6px 0 0"><input type="checkbox" style="width:auto" data-set="swap" ${st.swap ? 'checked' : ''}> 바꾸기</label></div>
         <div><label>BT 보정 (°C)</label>${num('btOff', .1)}</div><div><label>ET 보정 (°C)</label>${num('etOff', .1)}</div>
         <div><label>건조 종료 기준 BT (°C)</label>${num('dryTemp')}</div><div><label>크랙 감지 민감도 (낮을수록 민감)</label>${sel('micSens', [2, 3, 4, 6, 8])}</div>
-        <div><label>시뮬레이터 속도 (배)</label>${sel('simSpeed', [1, 2, 4, 8])}</div></div>
+        <div><label>시뮬레이터 속도 (배)</label>${sel('simSpeed', [1, 2, 4, 8])}</div>
+        <div><label>RoR 계산 간격 (초, 파이어스코프 기본 60)</label>${sel('rorWin', [30, 60])}</div></div>
       <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
       <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
       <div class="row" style="margin:8px 0"><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
@@ -561,6 +567,14 @@ function analyze(L, t, pts, ror) {
   // RoR 이상
   const rn = ror[ror.length - 1]; if (!rn || ev.tp == null) return;
   const rw = ror.filter(r => r.t >= rn.t - 20), rmax = Math.max(...rw.map(r => r.v)), rmin = Math.min(...rw.map(r => r.v));
+  if (ev.fc != null && !L.det.fcChecked && t > ev.fc + 3) {
+    const a = ror.filter(r => r.t <= ev.fc).pop(); L.det.fcChecked = 1;
+    if (a) addAlert(L, 'fcror', `1차 크랙 시점 RoR ${a.v.toFixed(1)} — ` + (a.v >= FC_ROR_MIN ? '양호 (10 이상)' : '낮음 (10 미만: 초반 열 과다 의심)'), 5);
+  }
+  if (ev.fc != null && t <= ev.fc + 75) {
+    const a = ror.filter(r => r.t <= ev.fc).pop();
+    if (a && a.v - rn.v >= CRASH_DROP) addAlert(L, 'fcdrop', `크랙 후 RoR 급락 −${(a.v - rn.v).toFixed(1)} — 베이크드 위험 (화력 유지/상향 검토)`, 60);
+  }
   if (ev.dry != null && ev.fc == null && rmax - rn.v >= 5) addAlert(L, 'crash', `RoR 급락 −${(rmax - rn.v).toFixed(1)}°C/분 — 크래시 주의 (화력↑ / 풍량↓)`);
   const b20 = bt.find(p => p.t >= cur.t - 20);
   if (b20 && cur.t - b20.t >= 15 && t > ev.tp + 40 && ev.fce == null && cur.bt < 208) {
@@ -569,6 +583,46 @@ function analyze(L, t, pts, ror) {
   }
   if (ev.fc != null && t > ev.fc + 10 && rn.v - rmin >= 2) addAlert(L, 'flick', `RoR 재상승(플릭) +${(rn.v - rmin).toFixed(1)}°C/분 — 화력 과다 주의`, 45);
   else if (ev.fc == null && cur.bt >= 185 && rn.v - rmin >= 1.5) addAlert(L, 'fcmaybe', '크랙 임박/의심: RoR 반등 감지', 30);
+}
+
+/* ============ 데이터 기반 진단 (docs/roasting-data-guide.md 규칙) ============ */
+const CRASH_DROP = 6;   // 1차 크랙 후 1분 RoR 하강폭 (°C/분) — "45도보다 가파름"의 추정 환산
+const FC_ROR_MIN = 10;  // 1차 크랙 시점 RoR 하한 (이지스터 1.8 기준)
+function prevOf(r) {
+  const key = x => x.date + x.id, base = x => String(x.name).split(/[ #(]/)[0];
+  return S.roasts.filter(x => x.id !== r.id && key(x) < key(r) && ((r.greenId && x.greenId === r.greenId) || (!r.greenId && base(x) === base(r))))
+    .sort((a, b) => key(b).localeCompare(key(a)))[0];
+}
+function diagnose(r) {
+  const m = metrics(r), items = [], add = (lvl, t) => items.push({ lvl, t });
+  if (m.fc == null) return { items: [{ lvl: 'info', t: '1차 크랙 시점이 기록되지 않아 진단할 수 없습니다.' }], next: null };
+  if (m.rorFc == null) return { items: [{ lvl: 'info', t: 'BT 온도 로그가 부족해 RoR을 계산할 수 없습니다 (1분 이상의 기록 필요).' }], next: null };
+  const crash = m.fcDrop != null && m.fcDrop >= CRASH_DROP, low = m.rorFc < FC_ROR_MIN;
+  add(low ? 'warn' : 'ok', `1차 크랙 시점 RoR ${num(m.rorFc)} — ` + (low ? '10 미만: 초반 열을 너무 많이 쓴 패턴' : '10 이상: 양호'));
+  if (m.fcDrop != null) add(crash ? 'bad' : 'ok', `크랙 후 1분간 RoR 하강 ${num(m.fcDrop)} — ` + (crash ? '가파름(45° 초과 추정): 전반부 열 부족, 베이크드·언더디벨롭 가능성 높음' : '완만함(45° 이내 추정)'));
+  if (m.maxRor != null) add('info', `초반 최대 RoR ${num(m.maxRor)} — 낮출수록 1차 크랙 시점 RoR이 높아집니다`);
+  if (/플랫|베이크|baked|flat/i.test((r.notes || '') + ' ' + (r.cup && r.cup.notes || ''))) add('warn', '메모/컵핑에 플랫·베이크드 언급이 있습니다. 그래프 지표와 함께 확인하세요.');
+  const ct = r.chargeTemp != null && r.chargeTemp !== '' ? +r.chargeTemp : null, f0 = parseFloat(r.fire0);
+  let next;
+  if (crash) next = { v: '투입 온도 (크게)', why: '크랙 후 RoR 급락 = 전반부 열 부족',
+    t: (ct != null ? `투입 온도 ${ct}°C → ${ct - 30}°C` : '투입 온도를 약 30°C 크게 낮추고') + ', 낮춘 만큼 화력을 올려' + (!isNaN(f0) ? ` (${f0} → ${f0 + 1.5})` : '(+1~2)') + ' 로스팅 시간을 늘립니다. 배기와 배출 온도는 고정.' };
+  else if (low) next = { v: '초반 최대 RoR', why: '1차 크랙 시점 RoR 10 미만 = 초반 열 과다',
+    t: '투입 온도를 낮추거나 초반 화력을 줄여 초반 최대 RoR을 낮추세요. 그만큼 1차 크랙 시점 RoR이 올라갑니다. 변수는 하나만.' };
+  else next = { v: '기준 프로파일 확정', why: '1차 크랙 지표 양호',
+    t: '컵 평가가 좋으면 이 로스팅을 참고 곡선(기준)으로 삼고, 다음에는 변수 하나만 바꿔 비교하세요.' };
+  const pv = prevOf(r);
+  if (pv) {
+    const pm = metrics(pv), d = (a, b, u = '') => (a == null || b == null) ? '-' : ((a - b >= 0 ? '+' : '') + (a - b).toFixed(1) + u);
+    add('info', `이전 배치(${pv.name}) 대비: 투입 ${d(+r.chargeTemp || null, +pv.chargeTemp || null, '°C')} · 1차 크랙 RoR ${d(m.rorFc, pm.rorFc)} · 총 시간 ${m.total != null && pm.total != null ? (m.total - pm.total >= 0 ? '+' : '−') + fmtT(Math.abs(m.total - pm.total)) : '-'} · 배출 ${d(m.dropTemp, pm.dropTemp, '°C')}`);
+  }
+  return { items, next };
+}
+function diagnoseCard(r) {
+  const d = diagnose(r), ic = { ok: '✅', warn: '⚠️', bad: '❌', info: 'ℹ️' };
+  return `<div class="card"><h3>📋 진단 (이지스터 1.8 기준 원칙)</h3>
+    ${d.items.map(i => `<div style="padding:4px 0">${ic[i.lvl]} ${esc(i.t)}</div>`).join('')}
+    ${d.next ? `<div style="margin-top:10px;padding:10px;border-radius:10px;background:var(--panel2)"><b>다음 배치 제안 · 바꿀 변수: ${esc(d.next.v)}</b><div style="margin-top:4px">${esc(d.next.t)}</div><div class="muted" style="font-size:12px;margin-top:4px">근거: ${esc(d.next.why)}</div></div>` : ''}
+    <div class="muted" style="font-size:12px;margin-top:8px">다른 로스터기에서는 수치를 그대로 쓰지 말고 장비별 기준점에서 상대적으로 이동해 적용하세요.</div></div>`;
 }
 
 /* ============ 홈 ============ */
@@ -621,7 +675,7 @@ function vRoast(el) {
         <div class="stat"><div class="k">RoR 변화 (30초)</div><div class="v" style="font-size:18px" id="lvDR">-</div></div>
         <div class="stat"><div class="k">ET</div><div class="v" style="font-size:18px" id="lvET">-</div></div>
         <div class="stat"><div class="k">DTR</div><div class="v" style="font-size:18px" id="lvDTR">-</div></div>
-        <div class="stat"><div class="k">${ref ? '참고 대비 BT' : '크랙 소리'}</div><div class="v" style="font-size:18px" id="lvX">-</div></div>
+        <div class="stat"><div class="k">${ref ? '참고 대비 BT · RoR' : '크랙 소리'}</div><div class="v" style="font-size:18px" id="lvX">-</div></div>
       </div>
     </div>
     <div class="card">
@@ -643,8 +697,8 @@ function vRoast(el) {
         <button class="btn pri" id="btnLog" style="align-self:flex-end">기록</button>
       </div>
       <div class="row" style="margin-top:10px;flex-wrap:nowrap">
-        <div style="flex:1"><label>화력</label><input id="inFire" placeholder="예: 5 → 4" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].fire : '')}"></div>
-        <div style="flex:1"><label>댐퍼/풍량</label><input id="inAir" placeholder="예: 3" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].air : '')}"></div>
+        <div style="flex:1"><label>화력</label><input id="inFire" placeholder="예: 5 → 4" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].fire : (L.fire0 || ''))}"></div>
+        <div style="flex:1"><label>댐퍼/풍량</label><input id="inAir" placeholder="예: 3" value="${esc(L.controls.length ? L.controls[L.controls.length - 1].air : (L.air0 || ''))}"></div>
         <button class="btn" id="btnCtl" style="align-self:flex-end">변경 기록</button>
       </div>
       <div id="ctlList" class="muted" style="font-size:12px;margin-top:8px"></div>
@@ -665,6 +719,7 @@ function vRoast(el) {
     return s;
   };
   attachReadout(cv, $('#lvRead'), lvSeries);
+  const refRor = ref ? rorSeries(ptsOf(ref)) : [];
   let lastSave = Date.now();
   const refresh = () => {
     const t = liveT();
@@ -680,7 +735,7 @@ function vRoast(el) {
     $('#lvRor').textContent = rn ? rn.v.toFixed(1) : '-';
     $('#lvDR').textContent = rn && r30 ? ((rn.v - r30.v >= 0 ? '▲ +' : '▼ ') + (rn.v - r30.v).toFixed(1)) : '-';
     $('#lvDTR').textContent = L.events.fc != null ? ((t - L.events.fc) / t * 100).toFixed(1) + '%' : '-';
-    if (ref && lp && lp.bt != null) { const b = btAt(ptsOf(ref), t); $('#lvX').textContent = b != null ? ((lp.bt - b >= 0 ? '+' : '') + (lp.bt - b).toFixed(1) + '°C') : '-'; }
+    if (ref && lp && lp.bt != null) { const b = btAt(ptsOf(ref), t), rr = refRor.filter(x => x.t <= t).pop(), sg = v => (v >= 0 ? '+' : '') + v.toFixed(1); $('#lvX').textContent = b != null ? sg(lp.bt - b) + '°C' + (rn && rr ? ' · ' + sg(rn.v - rr.v) : '') : '-'; }
     else $('#lvX').textContent = L.cracks.length + '회';
     const mk = []; EVENTS.forEach(ev => { if (L.events[ev.k] != null) mk.push({ x: L.events[ev.k], label: ev.name }); });
     drawChart(cv, { series: lvSeries(), markers: mk, ticks: L.cracks, xmax: Math.max(t, 600) + 30, now: t });
@@ -750,6 +805,7 @@ function vSetup(el, pre = {}) {
         <div class="field"><label>목표 로스트 단계</label><select name="level">${LEVELS.map(l => `<option ${pre.level === l ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         <div class="field"><label>참고 곡선 (겹쳐서 보기)</label><select name="refId"><option value="">없음</option>${roasts.map(r => `<option value="${r.id}" ${pre.refId === r.id ? 'selected' : ''}>${esc(r.date)} · ${esc(r.name)}</option>`).join('')}</select></div>
       </div>
+      <div class="grid g2"><div class="field"><label>투입 시 화력 (미압/가스)</label><input name="fire0" placeholder="예: 5" value="${esc(pre.fire0 || '')}"></div><div class="field"><label>배기</label><input name="air0" placeholder="예: 강 / 7" value="${esc(pre.air0 || '')}"></div></div>
       <div class="field"><label>로스터기 / 메모</label><input name="roaster" placeholder="예: 1kg 직화" value="${esc(pre.roaster ?? S.settings.roaster)}"></div>
       <label class="chk" style="color:var(--text);font-size:14px"><input type="checkbox" id="autoCharge"> 투입 자동 감지 — 생두를 넣어 BT가 급락하면 타이머 자동 시작 (이름·투입량을 먼저 입력)</label>
       <button class="btn pri" style="width:100%;padding:14px;font-size:17px;margin-top:8px">🔥 투입 — 타이머 시작</button>
@@ -761,7 +817,7 @@ function startRoast(f, startedAt) {
   S.settings.roaster = f.roaster || '';
   S.live = {
     name: f.name, greenId: f.greenId || '', batchG: +f.batchG || 0, chargeTemp: f.chargeTemp === '' ? null : +f.chargeTemp,
-    ambient: f.ambient === '' ? null : +f.ambient, level: f.level, refId: f.refId, roaster: f.roaster,
+    ambient: f.ambient === '' ? null : +f.ambient, level: f.level, refId: f.refId, roaster: f.roaster, fire0: f.fire0 || '', air0: f.air0 || '',
     startedAt: startedAt || Date.now(), date: today(), points: [], events: {}, controls: [], alerts: [], cracks: [], det: {}
   };
   beepAt = 1; save(); go('roast');
@@ -798,7 +854,7 @@ function finishModal() {
 }
 function saveLive(f) {
   const L = S.live;
-  const r = { id: uid(), name: L.name, date: L.date, greenId: L.greenId, batchG: L.batchG, chargeTemp: L.chargeTemp, ambient: L.ambient, roaster: L.roaster, points: L.points, events: L.events, controls: L.controls, alerts: L.alerts || [], cracks: L.cracks || [], source: DAQ.mode || 'manual' };
+  const r = { id: uid(), name: L.name, date: L.date, greenId: L.greenId, batchG: L.batchG, chargeTemp: L.chargeTemp, ambient: L.ambient, roaster: L.roaster, fire0: L.fire0, air0: L.air0, points: L.points, events: L.events, controls: L.controls, alerts: L.alerts || [], cracks: L.cracks || [], source: DAQ.mode || 'manual' };
   readMeta(f, r);
   S.roasts.push(r); S.live = null; save(); closeModal(); toast('저장되었습니다'); go('detail', r.id);
 }
@@ -895,19 +951,21 @@ function vDetail(el) {
         <tr><td>투입</td><td>0:00</td><td>${num(r.chargeTemp)}</td></tr>
         ${EVENTS.map(ev => (r.events || {})[ev.k] != null ? `<tr><td>${ev.name}</td><td>${fmtT(r.events[ev.k])}</td><td>${num(btAt(ptsOf(r), r.events[ev.k]))}</td></tr>` : '').join('')}
         <tr><td>배출</td><td>${fmtT(m.total)}</td><td>${num(m.dropTemp)}</td></tr>
-        ${m.rorFc != null ? `<tr><td>1차 크랙 직전 RoR</td><td></td><td>${num(m.rorFc)}</td></tr>` : ''}
+        ${m.rorFc != null ? `<tr><td>1차 크랙 시점 RoR</td><td></td><td>${num(m.rorFc)}</td></tr>` : ''}${m.maxRor != null ? `<tr><td>초반 최대 RoR</td><td></td><td>${num(m.maxRor)}</td></tr>` : ''}${m.fcDrop != null ? `<tr><td>크랙 후 1분 RoR 하강</td><td></td><td>${num(m.fcDrop)}</td></tr>` : ''}
       </table></div>
       <div class="card"><h3>무게 · 원가</h3><table>
         <tr><td>투입량</td><td>${r.batchG ?? '-'} g</td></tr>
         <tr><td>배출 후</td><td>${r.roastedG ?? '-'} g</td></tr>
         <tr><td>로스트 단계</td><td>${esc(r.level || '-')}</td></tr>
         <tr><td>Agtron</td><td>${r.agtron ?? '-'}</td></tr>
+        <tr><td>투입 화력 / 배기</td><td>${esc(r.fire0 || '-')} / ${esc(r.air0 || '-')}</td></tr>
         <tr><td>실내 온도</td><td>${r.ambient != null ? r.ambient + ' °C' : '-'}</td></tr>
         <tr><td>생두 원가</td><td>${cost != null ? Math.round(cost).toLocaleString() + ' 원' : '-'}</td></tr>
         <tr><td>볶은 원두 1kg 원가</td><td>${costPerKg != null ? Math.round(costPerKg).toLocaleString() + ' 원' : '-'}</td></tr>
       </table></div>
     </div>
     ${(r.controls || []).length ? `<div class="card"><h3>화력 / 풍량 변경</h3><div class="muted">${r.controls.map(c => `${fmtT(c.t)} 화력 ${esc(c.fire || '-')} / 풍량 ${esc(c.air || '-')}`).join(' · ')}</div></div>` : ''}
+    ${diagnoseCard(r)}
     ${(r.alerts || []).length ? `<div class="card"><h3>자동 분석 로그</h3><div class="alerts">${r.alerts.map(a => `<div><b>${fmtT(a.t)}</b>${esc(a.msg)}</div>`).join('')}</div>${(r.cracks || []).length ? `<div class="muted" style="font-size:12px;margin-top:6px">감지된 크랙 소리 ${r.cracks.length}회 (차트 하단 주황 눈금)</div>` : ''}</div>` : ''}
     <div class="card"><h3>메모 · 컵핑</h3>
       <p style="white-space:pre-wrap;margin:0 0 8px">${esc(r.notes || '메모 없음')}</p>
@@ -1081,7 +1139,7 @@ document.addEventListener('click', e => {
     case 'again': {
       const r = S.roasts.find(x => x.id === id);
       if (S.live) return toast('이미 진행 중인 로스팅이 있어요');
-      view = 'roast'; render(); vSetup($('#app'), { name: r.name.replace(/\s*#\d+.*$/, '') + ' (재로스팅)', greenId: r.greenId, batchG: r.batchG, chargeTemp: r.chargeTemp, level: r.level, refId: r.id });
+      view = 'roast'; render(); vSetup($('#app'), { name: r.name.replace(/\s*#\d+.*$/, '') + ' (재로스팅)', greenId: r.greenId, batchG: r.batchG, chargeTemp: r.chargeTemp, level: r.level, refId: r.id, fire0: r.fire0, air0: r.air0 });
       window.scrollTo(0, 0);
       break;
     }
