@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>화면 녹화</title>
+<style>
+  :root { --bg:#111; --fg:#fff; --red:#ff3b30; --muted:#8e8e93; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; gap:20px; padding:16px; background:var(--bg); color:var(--fg);
+         font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif; }
+  h1 { font-size:20px; margin:0; }
+  #rec { width:96px; height:96px; border-radius:50%; border:6px solid var(--fg); background:transparent;
+         padding:0; cursor:pointer; display:grid; place-items:center; }
+  #rec::after { content:""; width:64px; height:64px; border-radius:50%; background:var(--red);
+                transition:all .2s; }
+  #rec.on::after { width:32px; height:32px; border-radius:8px; }
+  #status { color:var(--muted); font-size:15px; min-height:20px; font-variant-numeric:tabular-nums; }
+  label { color:var(--muted); font-size:14px; }
+  #countdown { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.75);
+               font-size:30vmin; font-weight:700; z-index:10; }
+  #countdown.show { display:grid; }
+  video { max-width:100%; max-height:50vh; border-radius:12px; display:none; }
+  a.dl { display:none; padding:12px 24px; background:var(--fg); color:#000; border-radius:999px;
+         text-decoration:none; font-weight:600; }
+  #msg { color:#ffd60a; font-size:14px; text-align:center; max-width:360px; }
+</style>
+</head>
+<body>
+  <h1>화면 녹화</h1>
+  <button id="rec" aria-label="녹화 시작/종료"></button>
+  <div id="status">버튼을 누르면 3, 2, 1 후 녹화가 시작돼요</div>
+  <label><input type="checkbox" id="audio"> 소리도 함께 녹음</label>
+  <div id="msg"></div>
+  <video id="preview" controls playsinline></video>
+  <a id="dl" class="dl">저장하기</a>
+  <div id="countdown"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const rec = $('rec'), statusEl = $('status'), cd = $('countdown'),
+      preview = $('preview'), dl = $('dl'), msg = $('msg');
+
+let recorder = null, stream = null, chunks = [], timer = null, startedAt = 0;
+
+if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+  msg.textContent = '이 브라우저는 화면 녹화를 지원하지 않아요. (iPhone 사파리는 미지원 — 아이폰은 제어 센터의 기본 화면 기록을 쓰거나, PC/안드로이드 크롬에서 열어주세요.)';
+  rec.disabled = true;
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmt = s => String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+
+function pickMime() {
+  const list = ['video/webm;codecs=vp9,opus', 'video/webm', 'video/mp4'];
+  return list.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+}
+
+async function countdown() {
+  cd.classList.add('show');
+  for (const n of [3, 2, 1]) { cd.textContent = n; await sleep(1000); }
+  cd.classList.remove('show');
+}
+
+async function start() {
+  preview.style.display = dl.style.display = 'none';
+  msg.textContent = '';
+  try {
+    // 사용자 클릭 직후에 권한 창을 먼저 띄워야 브라우저가 허용함
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: $('audio').checked });
+  } catch (e) {
+    statusEl.textContent = '녹화가 취소됐어요';
+    return;
+  }
+  await countdown();
+  chunks = [];
+  const mimeType = pickMime();
+  recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = finish;
+  // 브라우저 자체의 '공유 중지' 버튼으로 끝낼 때도 처리
+  stream.getVideoTracks()[0].addEventListener('ended', () => recorder.state !== 'inactive' && recorder.stop());
+  recorder.start(1000);
+  rec.classList.add('on');
+  startedAt = Date.now();
+  timer = setInterval(() => statusEl.textContent = '● 녹화 중 ' + fmt(Math.floor((Date.now()-startedAt)/1000)), 250);
+}
+
+function stop() {
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+}
+
+function finish() {
+  clearInterval(timer);
+  stream.getTracks().forEach(t => t.stop());
+  rec.classList.remove('on');
+  const type = recorder.mimeType || 'video/webm';
+  const blob = new Blob(chunks, { type });
+  const url = URL.createObjectURL(blob);
+  preview.src = url;
+  dl.href = url;
+  dl.download = '녹화_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + (type.includes('mp4') ? '.mp4' : '.webm');
+  preview.style.display = 'block';
+  dl.style.display = 'inline-block';
+  statusEl.textContent = '녹화 완료 (' + fmt(Math.floor((Date.now()-startedAt)/1000)) + ')';
+  recorder = null;
+}
+
+rec.addEventListener('click', () => recorder ? stop() : start());
+</script>
+</body>
+</html>
