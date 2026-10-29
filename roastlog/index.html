@@ -387,7 +387,8 @@ function mbDecode(buf, slave, fc, qty) { // null = 아직 덜 받음
 const sgn16 = v => v > 32767 ? v - 65536 : v;
 async function mbQuery(slave, fc, addr, qty = 1, timeout = 400) {
   DAQ.rx.length = 0;
-  try { await DAQ.writer.write(mbFrame(slave, fc, addr, qty)); } catch (e) { return { err: '송신 실패' }; }
+  const fr = mbFrame(slave, fc, addr, qty); if (S.settings.dbg) mbLog('TX ' + hex(fr));
+  try { await DAQ.writer.write(fr); } catch (e) { return { err: '송신 실패' }; }
   const t0 = Date.now();
   while (Date.now() - t0 < timeout) { const r = mbDecode(DAQ.rx, slave, fc, qty); if (r) return r; await sleep(8); }
   return { err: DAQ.rx.length ? '불완전 응답' : '응답 없음' };
@@ -412,38 +413,100 @@ async function mbProbe() { // 수동 읽기 테스트
   const r = await mbQuery(v('prSlave'), v('prFc'), v('prAddr'), v('prQty') || 1, 600);
   mbLog(`ID${v('prSlave')} FC${v('prFc')} 주소${v('prAddr')} → ` + (r.regs ? r.regs.map(x => sgn16(x)).join(', ') : r.err)); DAQ.pause = false;
 }
-async function mbScan() { // 흔한 조합 자동 탐색
-  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
-  DAQ.pause = true; await sleep(450); mbLog('--- 자동 탐색 시작 ---'); let hit = 0; const alive = new Set();
-  for (const slave of [1, 2, 3, 4]) for (const fc of [4, 3]) for (const addr of [1000, 0, 1, 1001]) {
+const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join(' ');
+async function mbOpen(port, baud, parity) {
+  await port.open({ baudRate: baud, dataBits: 8, stopBits: 1, parity });
+  DAQ.rx = []; const rd = port.readable.getReader(); DAQ.reader = rd; DAQ.writer = port.writable.getWriter(); DAQ.port = port;
+  (async () => {
+    try { for (;;) { const { value, done } = await rd.read(); if (done) break; for (const b of value) DAQ.rx.push(b); if (S.settings.dbg) mbLog('RX ' + hex(value)); } } catch (e) {}
+    if (DAQ.reader === rd) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
+  })();
+}
+async function mbClose(port) {
+  const rd = DAQ.reader, w = DAQ.writer; DAQ.reader = DAQ.writer = null;
+  try { if (rd) await rd.cancel(); } catch (e) {}
+  try { if (w) w.releaseLock(); } catch (e) {}
+  try { if (rd) rd.releaseLock(); } catch (e) {}
+  try { await port.close(); } catch (e) {}
+}
+function textStart(port) {
+  const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader(); DAQ.reader = reader; let buf = '';
+  (async () => {
+    try { for (;;) { const { value, done } = await reader.read(); if (done) break; buf += value; let i; while ((i = buf.indexOf('\n')) >= 0) { const ln = buf.slice(0, i); if (S.settings.dbg) mbLog('RX ' + ln.trim()); serialLine(ln); buf = buf.slice(i + 1); } } } catch (e) {}
+    if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
+  })();
+}
+async function mbScanCore(ids = [1, 2, 3, 4]) {
+  const hits = [], alive = new Set();
+  for (const slave of ids) for (const fc of [4, 3]) for (const addr of [1000, 0, 1, 1001, 2, 3, 100, 1002]) {
     const r = await mbQuery(slave, fc, addr, 1, 250);
-    if (r.regs) { hit++; mbLog(`✔ ID${slave} FC${fc} 주소${addr} = ${sgn16(r.regs[0])} (÷10 = ${(sgn16(r.regs[0]) / 10).toFixed(1)})`); }
+    if (r.regs) { const v = sgn16(r.regs[0]); hits.push({ slave, fc, addr, v }); mbLog(`✔ ID${slave} FC${fc} 주소${addr} = ${v} (÷10 = ${(v / 10).toFixed(1)})`); }
     if (r.regs || (r.err || '').startsWith('장비 예외')) alive.add(slave);
   }
   mbLog('응답한 장치 ID: ' + (alive.size ? [...alive].join(', ') : '없음'));
-  mbLog(hit ? '--- 탐색 끝: ✔ 항목 중 현재 온도와 같은 값을 찾아 설정하세요 ---' : '--- 응답 없음: 보레이트/패리티/COM포트/배선 확인 ---'); DAQ.pause = false;
+  return { hits, alive };
+}
+async function mbScan() { // 수동 탐색 (이미 Modbus로 연결된 상태)
+  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
+  DAQ.pause = true; await sleep(450); mbLog('--- 레지스터 탐색 시작 ---');
+  const { hits } = await mbScanCore();
+  mbLog(hits.length ? '--- 끝: ✔ 항목 중 기계 화면의 현재 온도와 같은 값을 찾아 설정하세요 ---' : '--- 응답 없음: 보레이트/패리티/COM포트/배선 확인 ---');
+  DAQ.pause = false;
+}
+async function mbAutoDetect() { // 통신 설정(보레이트·패리티)부터 ID·주소까지 한 번에 탐색
+  if (!('serial' in navigator)) return toast('Chrome 또는 Edge 브라우저(노트북)에서 사용하세요');
+  let port; try { await daqOff(); port = await navigator.serial.requestPort(); } catch (e) { return; }
+  const det = $('#mbLog') && $('#mbLog').closest('details'); if (det) det.open = true;
+  DAQ.proto = 'modbus'; DAQ.mode = 'detect'; DAQ.pause = true; mbLog('=== 통신 설정 자동 탐색 시작 (약 1분) ===');
+  let found = null;
+  const combos = []; for (const baud of [9600, 19200, 38400, 115200, 57600]) for (const parity of ['none', 'even']) combos.push([baud, parity]);
+  outer: for (const [baud, parity] of combos) { // 1단계: 장비가 먼저 보내는 텍스트 방식인지 확인
+    try { await mbOpen(port, baud, parity); } catch (e) { mbLog('포트 열기 실패: ' + (e.message || e) + ' (다른 프로그램이 포트를 쓰고 있는지 확인)'); break outer; }
+    await sleep(400);
+    if (DAQ.rx.length) {
+      const txt = String.fromCharCode(...DAQ.rx), line = txt.split(/\r?\n/).find(l => parseLine(l));
+      mbLog(`${baud}/${parity}: 장비가 먼저 데이터를 보냄 → ${hex(DAQ.rx.slice(0, 20))}`);
+      if (line) { found = { text: true, baud, parity, line }; break outer; }
+    }
+    await mbClose(port);
+  }
+  if (!found) outer2: for (const [baud, parity] of combos) { // 2단계: Modbus 질의로 응답 확인
+    try { await mbOpen(port, baud, parity); } catch (e) { break outer2; }
+    for (const id of [1, 2, 3]) for (const fc of [4, 3]) {
+      const r = await mbQuery(id, fc, 1000, 1, 220);
+      if (r.regs || (r.err || '').startsWith('장비 예외')) { found = { baud, parity, id }; break outer2; }
+    }
+    mbLog(`${baud}/${parity}: 응답 없음`); await mbClose(port);
+  }
+  if (!found) { DAQ.mode = null; DAQ.pause = false; await mbClose(port); daqUI(); return mbLog('=== 통신 실패 ===\n확인: ①USB 케이블/드라이버(장치관리자 COM포트) ②포트를 쓰는 다른 프로그램 종료 ③기계 전원/통신 설정'); }
+  const st = S.settings; st.baud = found.baud; st.parity = found.parity;
+  if (found.text) {
+    mbLog(`=== 텍스트 방식 발견: ${found.baud}/${found.parity} 예) ${found.line.trim()} ===`);
+    st.proto = 'text'; save(); await mbClose(port); await port.open({ baudRate: found.baud, dataBits: 8, stopBits: 1, parity: found.parity });
+    DAQ.port = port; DAQ.proto = 'text'; DAQ.mode = 'serial'; DAQ.pause = false; textStart(port); daqUI(); return toast('연결되었습니다');
+  }
+  mbLog(`=== 통신 확인: ${found.baud}/${found.parity}, 장치 ID ${found.id} 응답 → 온도 레지스터 탐색 ===`);
+  DAQ.mode = 'serial';
+  const { hits } = await mbScanCore([1, 2, 3, 4]);
+  const ok = hits.filter(h => h.v / 10 >= 0 && h.v / 10 <= 350);
+  if (ok.length) {
+    const bt = ok[0], et = ok.find(h => h.slave !== bt.slave && h.fc === bt.fc && h.addr === bt.addr);
+    Object.assign(st, { proto: 'modbus', mbFc: bt.fc, mbBtId: bt.slave, mbBtAddr: bt.addr, mbEtId: et ? et.slave : 0, mbEtAddr: et ? et.addr : bt.addr });
+    save(); mbLog(`=== 자동 설정: BT=ID${bt.slave}, ET=${et ? 'ID' + et.slave : '없음'}, 기능코드 ${bt.fc}, 주소 ${bt.addr} ===\n※ 기계 화면 온도와 같은지 확인하세요. 반대면 설정의 "채널 서로 바꾸기"를 켜세요.`);
+    DAQ.pause = false; mbPoll(); daqUI(); toast('자동 설정 완료 — 온도를 확인하세요');
+  } else {
+    mbLog('=== 통신은 되지만 온도 값을 못 찾았습니다 === 기계 매뉴얼의 통신 주소표(PV 주소)가 필요합니다. 이 로그를 캡처해 주세요.');
+    DAQ.pause = false; save(); DAQ.mode = 'serial'; mbPoll(); daqUI();
+  }
 }
 async function serialConnect() {
   if (!('serial' in navigator)) return toast('Chrome 또는 Edge 브라우저(노트북)에서 사용하세요');
   try {
     await daqOff();
     const st = S.settings, port = await navigator.serial.requestPort();
-    await port.open({ baudRate: +st.baud || 9600, dataBits: 8, stopBits: 1, parity: st.parity || 'none' });
-    DAQ.port = port; DAQ.mode = 'serial'; DAQ.proto = st.proto || 'modbus'; DAQ.err = ''; DAQ.pause = false;
-    if (DAQ.proto === 'modbus') {
-      DAQ.rx = []; const rd = port.readable.getReader(); DAQ.reader = rd; DAQ.writer = port.writable.getWriter();
-      (async () => {
-        try { for (;;) { const { value, done } = await rd.read(); if (done) break; for (const b of value) DAQ.rx.push(b); } } catch (e) {}
-        if (DAQ.reader === rd) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
-      })();
-      mbPoll();
-    } else {
-      const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader(); DAQ.reader = reader; let buf = '';
-      (async () => {
-        try { for (;;) { const { value, done } = await reader.read(); if (done) break; buf += value; let i; while ((i = buf.indexOf('\n')) >= 0) { serialLine(buf.slice(0, i)); buf = buf.slice(i + 1); } } } catch (e) {}
-        if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
-      })();
-    }
+    DAQ.proto = st.proto || 'modbus'; DAQ.err = ''; DAQ.pause = false;
+    if (DAQ.proto === 'modbus') { await mbOpen(port, +st.baud || 9600, st.parity || 'none'); DAQ.mode = 'serial'; mbPoll(); }
+    else { await port.open({ baudRate: +st.baud || 9600, dataBits: 8, stopBits: 1, parity: st.parity || 'none' }); DAQ.port = port; DAQ.mode = 'serial'; textStart(port); }
     toast('연결되었습니다'); daqUI();
   } catch (e) { if (e && e.name !== 'NotFoundError') toast('연결 실패: ' + (e.message || e)); }
 }
@@ -494,7 +557,7 @@ function daqPanel() {
   const num = (k, step = 1) => `<input type="number" step="${step}" data-set="${k}" value="${st[k]}">`;
   return `<div class="card"><div class="row sp"><h3 style="margin:0">🔌 장비 연결</h3><span id="daqState" class="tag"></span></div>
     <div class="big" id="daqRead" style="margin:10px 0"></div>
-    <div class="row"><button class="btn sm pri" data-act="daqSerial">USB 시리얼 연결</button><button class="btn sm" data-act="daqSim">시뮬레이터</button>
+    <div class="row"><button class="btn sm pri" data-act="daqSerial">USB 시리얼 연결</button><button class="btn sm" data-act="mbAuto">🔎 통신 설정 자동 탐색</button><button class="btn sm" data-act="daqSim">시뮬레이터</button>
       <button class="btn sm" data-act="daqOff">해제</button><button class="btn sm" data-act="micToggle">${MIC.on ? '🎤 크랙 감지 끄기' : '🎤 크랙 소리 감지'}</button></div>
     <details style="margin-top:10px"><summary class="muted">연결 설정 (프로토콜 · 보레이트 · Modbus 주소)</summary>
       <div class="grid g2" style="margin-top:8px">
@@ -512,7 +575,7 @@ function daqPanel() {
         <div><label>RoR 계산 간격 (초, 파이어스코프 기본 60)</label>${sel('rorWin', [30, 60])}</div></div>
       <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
       <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
-      <div class="row" style="margin:8px 0"><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
+      <div class="row" style="margin:8px 0"><label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="dbg" ${st.dbg ? 'checked' : ''}> 통신 로그(TX/RX) 표시</label><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
       <pre id="mbLog" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:150px;overflow:auto;margin:0;white-space:pre-wrap">${esc((DAQ.logs || []).join('\n'))}</pre>
     </details></div>`;
 }
@@ -656,12 +719,13 @@ function rItem(r) {
 }
 
 /* ============ 로스팅 (라이브) ============ */
-let tickId = null, beepAt = 0;
+let tickId = null, beepAt = 0, wakeLock = null;
 function stopTick() { if (tickId) { clearInterval(tickId); tickId = null; } }
 const liveT = () => (Date.now() - S.live.startedAt) / 1000;
 
 function vRoast(el) {
   if (!S.live) return vSetup(el);
+  if (!wakeLock && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { wakeLock = l; l.addEventListener('release', () => { wakeLock = null; }); }).catch(() => {}); // 로스팅 중 화면 꺼짐 방지
   const L = S.live; L.alerts = L.alerts || []; L.cracks = L.cracks || []; L.det = L.det || {};
   const last = L.points[L.points.length - 1] || {};
   const ref = L.refId ? S.roasts.find(r => r.id === L.refId) : null;
@@ -789,6 +853,7 @@ function greenOptions(sel) {
   return '<option value="">(생두 미지정)</option>' + S.greens.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(g.name)} — 잔량 ${(greenRemainG(g) / 1000).toFixed(1)}kg</option>`).join('');
 }
 function vSetup(el, pre = {}) {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
   const roasts = S.roasts.slice().sort((a, b) => (b.date + b.id).localeCompare(a.date + a.id));
   el.innerHTML = `
     <h2>새 로스팅</h2>
@@ -1121,6 +1186,7 @@ document.addEventListener('click', e => {
     case 'daqOff': daqOff(); break;
     case 'mbProbe': mbProbe(); break;
     case 'mbScan': mbScan(); break;
+    case 'mbAuto': mbAutoDetect(); break;
     case 'micToggle': micToggle(); break;
     case 'edit': {
       const r = S.roasts.find(x => x.id === id);
