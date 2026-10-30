@@ -519,6 +519,28 @@ async function mbWatch() { // 장치의 여러 레지스터를 8칸씩 읽어 �
   }
   DAQ.watch = false; DAQ.pause = false;
 }
+async function mbIdScan() { // 연결된 통신선에서 장치 ID 1~247을 모두 확인하고, 응답한 장치의 흔한 온도 주소 값을 표시
+  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus로 USB 연결하세요 (연결 후 사용)');
+  DAQ.watch = false; DAQ.pause = true; await sleep(600);
+  const det = $('#mbLog') && $('#mbLog').closest('details'); if (det) det.open = true;
+  mbLog('=== 장치 ID 전체 탐색 (1~247, 약 1~2분) ===');
+  const alive = [];
+  for (let id = 1; id <= 247 && DAQ.writer; id++) {
+    for (const fc of [4, 3]) {
+      const r = await mbQuery(id, fc, 1000, 1, 130, 1);
+      if (r.regs || (r.err || '').startsWith('장비 예외')) { alive.push({ id, fc }); mbLog(`ID${id} FC${fc}: ` + (r.regs ? `값 ${sgn16(r.regs[0])}` : '응답함 (이 주소/기능은 없음)')); break; }
+    }
+    if (id % 50 === 0) mbLog(`… ${id}/247 확인`);
+  }
+  const ids = [...new Set(alive.map(a => a.id))];
+  mbLog('응답한 장치 ID: ' + (ids.join(', ') || '없음'));
+  for (const id of ids) for (const fc of [4, 3]) for (const addr of [1000, 1001, 1002, 0, 1, 2, 3, 100]) {
+    const r = await mbQuery(id, fc, addr, 1, 200, 1);
+    if (r.regs) { const v = sgn16(r.regs[0]); mbLog(`  ID${id} FC${fc} 주소${addr} = ${v} (÷10=${(v / 10).toFixed(1)})`); }
+  }
+  mbLog('=== 끝: 기계 화면의 BEAN/AIR 온도와 같은 값이 나오는 ID·주소를 알려주세요 ===');
+  DAQ.pause = false;
+}
 async function mbScan() { // 수동 탐색 (이미 Modbus로 연결된 상태)
   if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
   DAQ.pause = true; await sleep(450); mbLog('--- 레지스터 탐색 시작 ---');
@@ -698,7 +720,7 @@ function daqPanel() {
         <div><label>RoR 계산 간격 (초, 파이어스코프 기본 60)</label>${sel('rorWin', [30, 60])}</div></div>
       <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
       <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
-      <div class="row" style="margin:8px 0"><span class="muted" style="font-size:12px">시작주소 / 개수</span><input id="wStart" type="number" value="56" style="width:90px"><input id="wCount" type="number" value="64" style="width:90px"><button class="btn sm pri" data-act="mbWatch">📊 실시간 값 표 (켜기/끄기)</button></div>
+      <div class="row" style="margin:8px 0"><span class="muted" style="font-size:12px">시작주소 / 개수</span><input id="wStart" type="number" value="56" style="width:90px"><input id="wCount" type="number" value="64" style="width:90px"><button class="btn sm pri" data-act="mbWatch">📊 실시간 값 표 (켜기/끄기)</button><button class="btn sm" data-act="mbIdScan">🔢 장치 ID 전체 탐색 (1~247)</button></div>
       <div id="mbWatch" class="scroll-x" style="font-size:13px"></div>
       <div class="row" style="margin:8px 0"><label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="dbg" ${st.dbg ? 'checked' : ''}> 통신 로그(TX/RX) 표시</label><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
       <pre id="mbLog" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:150px;overflow:auto;margin:0;white-space:pre-wrap">${esc((DAQ.logs || []).join('\n'))}</pre>
@@ -1315,6 +1337,7 @@ document.addEventListener('click', e => {
     case 'mbAutoFull': mbAutoDetect(true); break;
     case 'mbSniff': mbSniff(); break;
     case 'mbWatch': mbWatch(); break;
+    case 'mbIdScan': mbIdScan(); break;
     case 'setReg': {
       const st = S.settings, k = t.dataset.k, a = +t.dataset.a, sc = Math.abs(+t.dataset.v) >= 500 ? 10 : 1, set = (key, v) => { st[key] = v; const i = $(`[data-set=${key}]`); if (i) i.value = v; };
       if (k === 'bt') { set('mbBtAddr', a); set('mbScale', sc); } else { set('mbEtId', st.mbBtId); set('mbEtAddr', a); set('mbScaleE', sc); }
