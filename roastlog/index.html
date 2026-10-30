@@ -126,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', stop: 1, mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10, mbScaleE: 0 } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', stop: 2, mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10, mbScaleE: 0 } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
