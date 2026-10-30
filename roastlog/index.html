@@ -126,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', stop: 1, mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', stop: 1, mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10, mbScaleE: 0 } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
@@ -414,7 +414,7 @@ async function mbPoll() {
     let e = null;
     if (+st.mbEtId > 0) { await sleep(20); e = await mbQuery(+st.mbEtId, fc, +st.mbEtAddr, 1); }
     if (DAQ.mode !== 'serial' || DAQ.pollId !== loop) break;
-    if (b.regs) { const sc = +st.mbScale || 10; daqFeed(...daqCal(sgn16(b.regs[0]) / sc, e && e.regs ? sgn16(e.regs[0]) / sc : null)); }
+    if (b.regs) { const sc = +st.mbScale || 10, sce = +st.mbScaleE || sc; daqFeed(...daqCal(sgn16(b.regs[0]) / sc, e && e.regs ? sgn16(e.regs[0]) / sce : null)); }
     else { DAQ.err = 'BT ' + b.err + ' — ID/주소/배선 확인'; daqUI(); }
     await sleep(150);
   }
@@ -499,6 +499,26 @@ async function mbScanCore(ids = [1, 2, 3, 4]) {
   mbLog('응답한 장치 ID: ' + (alive.size ? [...alive].join(', ') : '없음'));
   return { hits, alive };
 }
+async function mbWatch() { // 장치의 여러 레지스터를 8칸씩 읽어 표로 보여주고, 기계 화면과 비교해 BT/ET를 직접 지정
+  if (DAQ.watch) { DAQ.watch = false; return; }
+  if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus로 USB 연결하세요 (연결 후 사용)');
+  DAQ.watch = true; DAQ.pause = true; await sleep(450); let prev = {};
+  while (DAQ.watch && DAQ.writer && $('#mbWatch')) {
+    const st = S.settings, start = Math.max(0, +$('#wStart').value || 0), cnt = Math.min(+$('#wCount').value || 64, 256), rows = [];
+    for (let a = start; a < start + cnt && DAQ.watch; a += 8) {
+      const r = await mbQuery(+st.mbBtId, +st.mbFc || 3, a, 8, 400);
+      if (r.regs) r.regs.forEach((raw, i) => { const v = sgn16(raw); if (v !== 0) rows.push({ a: a + i, v }); });
+    }
+    const el = $('#mbWatch'); if (!el) break;
+    el.innerHTML = rows.length ? `<table><tr><th>주소</th><th>값</th><th>÷10</th><th>변화</th><th>지정</th></tr>${rows.map(x => {
+      const p = prev[x.a], d = p == null || p === x.v ? '' : (x.v > p ? '▲' : '▼');
+      return `<tr><td>${x.a}</td><td>${x.v}</td><td>${(x.v / 10).toFixed(1)}</td><td style="color:var(--${d === '▲' ? 'danger' : 'et'})">${d}</td><td><button class="btn sm" data-act="setReg" data-k="bt" data-a="${x.a}" data-v="${x.v}">BT</button> <button class="btn sm" data-act="setReg" data-k="et" data-a="${x.a}" data-v="${x.v}">ET</button></td></tr>`;
+    }).join('')}</table>` : '<span class="muted">읽을 수 있는 값이 없습니다 (시작주소/개수를 바꿔보세요)</span>';
+    rows.forEach(x => { prev[x.a] = x.v; });
+    await sleep(500);
+  }
+  DAQ.watch = false; DAQ.pause = false;
+}
 async function mbScan() { // 수동 탐색 (이미 Modbus로 연결된 상태)
   if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus 모드로 USB 연결하세요');
   DAQ.pause = true; await sleep(450); mbLog('--- 레지스터 탐색 시작 ---');
@@ -543,7 +563,7 @@ async function mbAutoDetect(full = false) {
   const ask = l => { const v = parseFloat(prompt(l, '')); return isNaN(v) ? null : v; };
   DAQ.tgt = { bt: ask('기계 화면에 보이는 현재 BT(원두 온도)를 숫자로 입력하세요.\n(모르면 취소)'), et: ask('기계 화면에 보이는 현재 ET(배기/드럼 온도)를 숫자로 입력하세요.\n(모르면 취소)') };
   mbLog(`기계 화면 온도 입력: BT ${DAQ.tgt.bt ?? '-'} / ET ${DAQ.tgt.et ?? '-'}`);
-  Object.assign(S.settings, { mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbFc: 4, mbScale: 10 }); // 이전에 잘못 잡힌 값 초기화
+  Object.assign(S.settings, { mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbFc: 4, mbScale: 10, mbScaleE: 0 }); // 이전에 잘못 잡힌 값 초기화
   DAQ.proto = 'modbus'; DAQ.mode = 'detect'; DAQ.pause = true; mbLog('=== 통신 설정 자동 탐색 시작 (1~2분) ===');
   let found = null;
   const combos = []; for (const baud of [9600, 19200, 38400, 115200, 57600]) for (const parity of ['none', 'even']) for (const stop of [1, 2]) combos.push([baud, parity, stop]);
@@ -670,7 +690,7 @@ function daqPanel() {
         <div><label>Modbus 기능코드</label>${sel('mbFc', [4, 3])}</div>
         <div><label>BT 장치 ID</label>${num('mbBtId')}</div><div><label>BT 레지스터 주소 (10진수)</label>${num('mbBtAddr')}</div>
         <div><label>ET 장치 ID (0이면 사용 안 함)</label>${num('mbEtId')}</div><div><label>ET 레지스터 주소</label>${num('mbEtAddr')}</div>
-        <div><label>값 나누기 (소수점 처리, 보통 10)</label>${num('mbScale')}</div>
+        <div><label>BT 값 나누기 (보통 10)</label>${num('mbScale')}</div><div><label>ET 값 나누기 (0이면 BT와 같음)</label>${num('mbScaleE')}</div>
         <div><label>BT/ET 채널 서로 바꾸기</label><label class="row" style="margin:6px 0 0"><input type="checkbox" style="width:auto" data-set="swap" ${st.swap ? 'checked' : ''}> 바꾸기</label></div>
         <div><label>BT 보정 (°C)</label>${num('btOff', .1)}</div><div><label>ET 보정 (°C)</label>${num('etOff', .1)}</div>
         <div><label>건조 종료 기준 BT (°C)</label>${num('dryTemp')}</div><div><label>크랙 감지 민감도 (낮을수록 민감)</label>${sel('micSens', [2, 3, 4, 6, 8])}</div>
@@ -678,6 +698,8 @@ function daqPanel() {
         <div><label>RoR 계산 간격 (초, 파이어스코프 기본 60)</label>${sel('rorWin', [30, 60])}</div></div>
       <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
       <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
+      <div class="row" style="margin:8px 0"><span class="muted" style="font-size:12px">시작주소 / 개수</span><input id="wStart" type="number" value="56" style="width:90px"><input id="wCount" type="number" value="64" style="width:90px"><button class="btn sm pri" data-act="mbWatch">📊 실시간 값 표 (켜기/끄기)</button></div>
+      <div id="mbWatch" class="scroll-x" style="font-size:13px"></div>
       <div class="row" style="margin:8px 0"><label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="dbg" ${st.dbg ? 'checked' : ''}> 통신 로그(TX/RX) 표시</label><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
       <pre id="mbLog" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:150px;overflow:auto;margin:0;white-space:pre-wrap">${esc((DAQ.logs || []).join('\n'))}</pre>
     </details></div>`;
@@ -1292,6 +1314,12 @@ document.addEventListener('click', e => {
     case 'mbAuto': mbAutoDetect(false); break;
     case 'mbAutoFull': mbAutoDetect(true); break;
     case 'mbSniff': mbSniff(); break;
+    case 'mbWatch': mbWatch(); break;
+    case 'setReg': {
+      const st = S.settings, k = t.dataset.k, a = +t.dataset.a, sc = Math.abs(+t.dataset.v) >= 500 ? 10 : 1, set = (key, v) => { st[key] = v; const i = $(`[data-set=${key}]`); if (i) i.value = v; };
+      if (k === 'bt') { set('mbBtAddr', a); set('mbScale', sc); } else { set('mbEtId', st.mbBtId); set('mbEtAddr', a); set('mbScaleE', sc); }
+      save(); toast(`${k.toUpperCase()} = 주소 ${a} (÷${sc}) 로 지정 — 표를 끄면(📊 다시 누름) 화면에 반영됩니다`); break;
+    }
     case 'micToggle': micToggle(); break;
     case 'edit': {
       const r = S.roasts.find(x => x.id === id);
