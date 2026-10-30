@@ -77,6 +77,12 @@ canvas.chart { width: 100%; height: 320px; display: block; background: var(--bg)
 .readout { font-size: 13px; min-height: 20px; color: var(--muted); margin-top: 6px; font-variant-numeric: tabular-nums; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.live4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.live4 .tile { background: var(--panel2); border-radius: 12px; padding: 10px 12px; }
+.live4 .k { font-size: 12px; color: var(--muted); }
+.live4 .u { font-size: 12px; color: var(--muted); }
+.bignum { font-size: 46px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .live4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .bignum { font-size: 38px; } }
 .timer { font-size: 56px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; }
 .big { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .phase { height: 14px; border-radius: 7px; overflow: hidden; display: flex; background: var(--panel2); margin: 6px 0; }
@@ -914,13 +920,16 @@ function vRoast(el) {
   const ref = L.refId ? S.roasts.find(r => r.id === L.refId) : null;
   el.innerHTML = `
     <div class="card">
-      <div class="row sp"><div><div class="muted" style="font-size:12px">${esc(L.name)} · ${L.batchG}g</div><div class="timer" id="lvTimer">0:00</div></div>
-        <div style="text-align:right"><div class="muted" style="font-size:12px" id="lvPhase"></div>
-          <div class="big" style="color:var(--bt)" id="lvBT">-</div><div class="muted" style="font-size:12px">BT °C</div></div>
-        <div style="text-align:right"><div class="big" style="color:var(--ror)" id="lvRor">-</div><div class="muted" style="font-size:12px">RoR °C/분</div></div></div>
+      <div class="muted" style="font-size:12px;margin-bottom:6px">${esc(L.name)} · ${L.batchG}g</div>
+      <div class="live4">
+        <div class="tile"><div class="k">경과 시간</div><div class="bignum" id="lvTimer">0:00</div><div class="u">&nbsp;</div></div>
+        <div class="tile"><div class="k">원두 온도 BT (BEAN)</div><div class="bignum" style="color:var(--bt)" id="lvBT">-</div><div class="u">°C</div></div>
+        <div class="tile"><div class="k">에어 온도 ET (AIR)</div><div class="bignum" style="color:var(--et)" id="lvET">-</div><div class="u">°C</div></div>
+        <div class="tile"><div class="k">RoR (원두 상승률)</div><div class="bignum" style="color:var(--ror)" id="lvRor">-</div><div class="u">°C/분</div></div>
+      </div>
       <div class="grid g4" style="margin-top:12px">
+        <div class="stat"><div class="k">단계</div><div class="v" style="font-size:18px" id="lvPhase">-</div></div>
         <div class="stat"><div class="k">RoR 변화 (30초)</div><div class="v" style="font-size:18px" id="lvDR">-</div></div>
-        <div class="stat"><div class="k">ET</div><div class="v" style="font-size:18px" id="lvET">-</div></div>
         <div class="stat"><div class="k">DTR</div><div class="v" style="font-size:18px" id="lvDTR">-</div></div>
         <div class="stat"><div class="k">${ref ? '참고 대비 BT · RoR' : '크랙 소리'}</div><div class="v" style="font-size:18px" id="lvX">-</div></div>
       </div>
