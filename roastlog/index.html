@@ -126,7 +126,7 @@ details summary { cursor: pointer; font-size: 13px; }
 'use strict';
 /* ============ 저장소 ============ */
 const KEY = 'dayy.roastlog.v1';
-const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
+const fresh = () => ({ greens: [], roasts: [], live: null, settings: { beepSec: 60, lowKg: 2, roaster: '', baud: 9600, btOff: 0, etOff: 0, swap: false, micSens: 4, dryTemp: 160, simSpeed: 1, rorWin: 60, theme: '', proto: 'modbus', parity: 'none', stop: 1, mbFc: 4, mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbScale: 10 } });
 function load() {
   try { const d = JSON.parse(localStorage.getItem(KEY)); if (d && d.roasts) { const f = Object.assign(fresh(), d); f.settings = Object.assign(fresh().settings, d.settings); return f; } } catch (e) {}
   return fresh();
@@ -426,8 +426,8 @@ async function mbProbe() { // 수동 읽기 테스트
   mbLog(`ID${v('prSlave')} FC${v('prFc')} 주소${v('prAddr')} → ` + (r.regs ? r.regs.map(x => sgn16(x)).join(', ') : r.err)); DAQ.pause = false;
 }
 const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join(' ');
-async function mbOpen(port, baud, parity) {
-  const opts = { baudRate: baud, dataBits: 8, stopBits: 1, parity };
+async function mbOpen(port, baud, parity, stop = +S.settings.stop || 1) {
+  const opts = { baudRate: baud, dataBits: 8, stopBits: stop, parity };
   try { await port.open(opts); } catch (e) {
     if (!/already open/i.test(e.message || '')) throw e;
     await portShut(port, null, null); // 이전 연결이 남아 있으면 정리 후 재시도
@@ -454,9 +454,9 @@ async function mbClose(port) {
   const rd = DAQ.reader, w = DAQ.writer, dn = DAQ.readDone; DAQ.reader = DAQ.writer = null;
   await portShut(port, rd, w, dn);
 }
-async function mbReopen(port, baud, parity) { // 닫은 직후 다시 열 때 실패할 수 있어 재시도
+async function mbReopen(port, baud, parity, stop) { // 닫은 직후 다시 열 때 실패할 수 있어 재시도
   let err = null;
-  for (let i = 0; i < 4; i++) { try { await mbOpen(port, baud, parity); return null; } catch (e) { err = e; await sleep(400); } }
+  for (let i = 0; i < 4; i++) { try { await mbOpen(port, baud, parity, stop); return null; } catch (e) { err = e; await sleep(400); } }
   return err;
 }
 function textStart(port) {
@@ -543,36 +543,37 @@ async function mbAutoDetect(full = false) {
   const ask = l => { const v = parseFloat(prompt(l, '')); return isNaN(v) ? null : v; };
   DAQ.tgt = { bt: ask('기계 화면에 보이는 현재 BT(원두 온도)를 숫자로 입력하세요.\n(모르면 취소)'), et: ask('기계 화면에 보이는 현재 ET(배기/드럼 온도)를 숫자로 입력하세요.\n(모르면 취소)') };
   mbLog(`기계 화면 온도 입력: BT ${DAQ.tgt.bt ?? '-'} / ET ${DAQ.tgt.et ?? '-'}`);
+  Object.assign(S.settings, { mbBtId: 1, mbBtAddr: 1000, mbEtId: 2, mbEtAddr: 1000, mbFc: 4, mbScale: 10 }); // 이전에 잘못 잡힌 값 초기화
   DAQ.proto = 'modbus'; DAQ.mode = 'detect'; DAQ.pause = true; mbLog('=== 통신 설정 자동 탐색 시작 (1~2분) ===');
   let found = null;
-  const combos = []; for (const baud of [9600, 19200, 38400, 115200, 57600]) for (const parity of ['none', 'even']) combos.push([baud, parity]);
-  if (fast) { combos.length = 0; combos.push([+S.settings.baud || 9600, S.settings.parity || 'none']); } // 기본: 저장된 통신 설정 1개만 (포트를 닫지 않음)
-  if (!fast) outer: for (const [baud, parity] of combos) { // 1단계: 장비가 먼저 보내는 텍스트 방식인지 확인
-    const oe = await mbReopen(port, baud, parity); if (oe) { mbLog('포트 열기 실패: ' + (oe.message || oe) + ' (다른 프로그램이 포트를 쓰고 있는지 확인)'); break outer; }
+  const combos = []; for (const baud of [9600, 19200, 38400, 115200, 57600]) for (const parity of ['none', 'even']) for (const stop of [1, 2]) combos.push([baud, parity, stop]);
+  if (fast) { combos.length = 0; combos.push([+S.settings.baud || 9600, S.settings.parity || 'none', +S.settings.stop || 1]); } // 기본: 저장된 통신 설정 1개만 (포트를 닫지 않음)
+  if (!fast) outer: for (const [baud, parity, stop] of combos) { // 1단계: 장비가 먼저 보내는 텍스트 방식인지 확인
+    const oe = await mbReopen(port, baud, parity, stop); if (oe) { mbLog('포트 열기 실패: ' + (oe.message || oe) + ' (다른 프로그램이 포트를 쓰고 있는지 확인)'); break outer; }
     await sleep(400);
     if (DAQ.rx.length) {
       const txt = String.fromCharCode(...DAQ.rx), line = txt.split(/\r?\n/).find(l => parseLine(l));
       mbLog(`${baud}/${parity}: 장비가 먼저 데이터를 보냄 → ${hex(DAQ.rx.slice(0, 20))}`);
-      if (line) { found = { text: true, baud, parity, line }; break outer; }
+      if (line) { found = { text: true, baud, parity, stop, line }; break outer; }
     }
     await mbClose(port);
   }
-  if (!found) outer2: for (const [baud, parity] of combos) { // 2단계: Modbus 질의로 응답 확인
-    const oe = await mbReopen(port, baud, parity); if (oe) { mbLog(`${baud}/${parity}: 포트 다시 열기 실패 — ${oe.message || oe}`); break outer2; }
+  if (!found) outer2: for (const [baud, parity, stop] of combos) { // 2단계: Modbus 질의로 응답 확인
+    const oe = await mbReopen(port, baud, parity, stop); if (oe) { mbLog(`${baud}/${parity}/정지${stop}: 포트 다시 열기 실패 — ${oe.message || oe}`); break outer2; }
     for (const id of [1, 2, 3, 4, 5, 6, 7, 8]) for (const fc of [4, 3]) {
       const r = await mbQuery(id, fc, 1000, 1, 250, 2);
-      if (r.regs || (r.err || '').startsWith('장비 예외')) { found = { baud, parity, id }; break outer2; }
+      if (r.regs || (r.err || '').startsWith('장비 예외')) { found = { baud, parity, stop, id }; break outer2; }
     }
-    mbLog(`${baud}/${parity}: 응답 없음` + (fast ? ' → "다른 통신속도까지 탐색" 버튼을 눌러보세요' : '')); await mbClose(port);
+    mbLog(`${baud}/${parity}/정지${stop}: 응답 없음` + (fast ? ' → "다른 통신속도까지 탐색" 버튼을 눌러보세요' : '')); await mbClose(port);
   }
   if (!found) { DAQ.mode = null; DAQ.pause = false; await mbClose(port); daqUI(); return mbLog('=== 통신 실패 ===\n확인: ①USB 케이블/드라이버(장치관리자 COM포트) ②포트를 쓰는 다른 프로그램 종료 ③기계 전원/통신 설정'); }
-  const st = S.settings; st.baud = found.baud; st.parity = found.parity;
+  const st = S.settings; st.baud = found.baud; st.parity = found.parity; st.stop = found.stop;
   if (found.text) {
     mbLog(`=== 텍스트 방식 발견: ${found.baud}/${found.parity} 예) ${found.line.trim()} ===`);
-    st.proto = 'text'; save(); await mbClose(port); await port.open({ baudRate: found.baud, dataBits: 8, stopBits: 1, parity: found.parity });
+    st.proto = 'text'; save(); await mbClose(port); await port.open({ baudRate: found.baud, dataBits: 8, stopBits: found.stop, parity: found.parity });
     DAQ.port = port; DAQ.proto = 'text'; DAQ.mode = 'serial'; DAQ.pause = false; textStart(port); daqUI(); return toast('연결되었습니다');
   }
-  mbLog(`=== 통신 확인: ${found.baud}/${found.parity}, 장치 ID ${found.id} 응답 (원문 ${hex(DAQ.rx.slice(0, 12))}) ===`);
+  mbLog(`=== 통신 확인: ${found.baud}/${found.parity}/정지${found.stop}, 장치 ID ${found.id} 응답 (원문 ${hex(DAQ.rx.slice(0, 12))}) ===`);
   DAQ.mode = 'serial';
   const alive = await mbAliveIds(), ids = alive.length ? alive : [found.id];
   mbLog('응답하는 장치 ID: ' + (alive.join(', ') || '재확인 안 됨'));
@@ -611,7 +612,7 @@ async function serialConnect() {
     const st = S.settings, port = await navigator.serial.requestPort();
     DAQ.proto = st.proto || 'modbus'; DAQ.err = ''; DAQ.pause = false;
     if (DAQ.proto === 'modbus') { await mbOpen(port, +st.baud || 9600, st.parity || 'none'); DAQ.mode = 'serial'; mbPoll(); }
-    else { await port.open({ baudRate: +st.baud || 9600, dataBits: 8, stopBits: 1, parity: st.parity || 'none' }); DAQ.port = port; DAQ.mode = 'serial'; textStart(port); }
+    else { await port.open({ baudRate: +st.baud || 9600, dataBits: 8, stopBits: +st.stop || 1, parity: st.parity || 'none' }); DAQ.port = port; DAQ.mode = 'serial'; textStart(port); }
     toast('연결되었습니다'); daqUI();
   } catch (e) { if (e && e.name !== 'NotFoundError') toast('연결 실패: ' + (e.message || e)); }
 }
@@ -665,7 +666,7 @@ function daqPanel() {
       <div class="grid g2" style="margin-top:8px">
         <div><label>프로토콜</label><select data-set="proto"><option value="modbus" ${st.proto === 'modbus' ? 'selected' : ''}>Modbus RTU (이지스터/Autonics 등)</option><option value="text" ${st.proto === 'text' ? 'selected' : ''}>텍스트 라인 (Arduino 등)</option></select></div>
         <div><label>보레이트</label>${sel('baud', [9600, 19200, 38400, 57600, 115200])}</div>
-        <div><label>패리티</label>${sel('parity', ['none', 'even', 'odd'])}</div>
+        <div><label>패리티</label>${sel('parity', ['none', 'even', 'odd'])}</div><div><label>정지 비트</label>${sel('stop', [1, 2])}</div>
         <div><label>Modbus 기능코드</label>${sel('mbFc', [4, 3])}</div>
         <div><label>BT 장치 ID</label>${num('mbBtId')}</div><div><label>BT 레지스터 주소 (10진수)</label>${num('mbBtAddr')}</div>
         <div><label>ET 장치 ID (0이면 사용 안 함)</label>${num('mbEtId')}</div><div><label>ET 레지스터 주소</label>${num('mbEtAddr')}</div>
