@@ -415,21 +415,30 @@ async function mbProbe() { // 수동 읽기 테스트
 }
 const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join(' ');
 async function mbOpen(port, baud, parity) {
-  await port.open({ baudRate: baud, dataBits: 8, stopBits: 1, parity });
+  const opts = { baudRate: baud, dataBits: 8, stopBits: 1, parity };
+  try { await port.open(opts); } catch (e) {
+    if (!/already open/i.test(e.message || '')) throw e;
+    await portShut(port, null, null); // 이전 연결이 남아 있으면 정리 후 재시도
+    try { await port.open(opts); } catch (e2) { throw new Error('포트가 다른 곳에서 사용 중입니다. 페이지를 새로고침(F5)한 뒤 다시 시도하세요. (' + (e2.message || e2) + ')'); }
+  }
   DAQ.rx = []; const rd = port.readable.getReader(); DAQ.reader = rd; DAQ.writer = port.writable.getWriter(); DAQ.port = port;
   (async () => {
     try { for (;;) { const { value, done } = await rd.read(); if (done) break; for (const b of value) DAQ.rx.push(b); if (S.settings.dbg) mbLog('RX ' + hex(value)); } } catch (e) {}
     if (DAQ.reader === rd) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
   })();
 }
-async function mbClose(port) {
-  const rd = DAQ.reader, w = DAQ.writer; DAQ.reader = DAQ.writer = null;
-  try { if (rd) await rd.cancel(); } catch (e) {}
-  try { if (w) await w.close(); } catch (e) {}
+const within = (p, ms = 1500) => Promise.race([p, sleep(ms)]);
+async function portShut(port, rd, w) { // 리더/라이터를 정리하고 포트를 확실히 닫음 (어떤 단계에서 막혀도 진행)
+  try { if (rd) await within(rd.cancel()); } catch (e) {}
+  try { if (w) await within(w.close()); } catch (e) {}
   try { if (w) w.releaseLock(); } catch (e) {}
   try { if (rd) rd.releaseLock(); } catch (e) {}
-  try { await port.close(); } catch (e) { if (!/already closed/.test(e.message || '')) mbLog('포트 닫기 오류: ' + (e.message || e)); }
+  try { await within(port.close()); } catch (e) { if (!/already closed/.test(e.message || '')) mbLog('포트 닫기 오류: ' + (e.message || e)); }
   await sleep(350); // USB 시리얼이 안정될 시간
+}
+async function mbClose(port) {
+  const rd = DAQ.reader, w = DAQ.writer; DAQ.reader = DAQ.writer = null;
+  await portShut(port, rd, w);
 }
 async function mbReopen(port, baud, parity) { // 닫은 직후 다시 열 때 실패할 수 있어 재시도
   let err = null;
@@ -563,10 +572,7 @@ async function serialConnect() {
 async function daqOff() {
   if (DAQ.simTimer) { clearInterval(DAQ.simTimer); DAQ.simTimer = null; }
   const r = DAQ.reader, w = DAQ.writer, p = DAQ.port; DAQ.reader = DAQ.writer = DAQ.port = null; DAQ.mode = null; DAQ.pollId = (DAQ.pollId || 0) + 1;
-  try { if (r) await r.cancel(); } catch (e) {}
-  try { if (w) w.releaseLock(); } catch (e) {}
-  try { if (r) r.releaseLock(); } catch (e) {}
-  try { if (p) await p.close(); } catch (e) {}
+  if (p) await portShut(p, r, w);
   DAQ.bt = DAQ.et = null; daqUI();
 }
 function simProfile(pt) { // 체험용: 1kg급 약 10분 라이트 로스트 곡선
