@@ -508,6 +508,12 @@ async function mbWatch() { // 장치의 여러 레지스터를 8칸씩 읽어 �
     for (let a = start; a < start + cnt && DAQ.watch; a += 8) {
       const r = await mbQuery(+st.mbBtId, +st.mbFc || 3, a, 8, 400);
       if (r.regs) r.regs.forEach((raw, i) => { const v = sgn16(raw); if (v !== 0) rows.push({ a: a + i, v }); });
+      else if ((r.err || '').startsWith('장비 예외')) { // 8칸 묶음이 거부되면 한 칸씩 읽어 읽히는 칸만 모음 (TX4S 같은 장치)
+        for (let k = 0; k < 8 && DAQ.watch; k++) {
+          const q = await mbQuery(+st.mbBtId, +st.mbFc || 3, a + k, 1, 250);
+          if (q.regs) { const v = sgn16(q.regs[0]); if (v !== 0) rows.push({ a: a + k, v }); }
+        }
+      }
     }
     const el = $('#mbWatch'); if (!el) break;
     el.innerHTML = rows.length ? `<table><tr><th>주소</th><th>값</th><th>÷10</th><th>변화</th><th>지정</th></tr>${rows.map(x => {
@@ -528,7 +534,7 @@ async function mbIdScan() { // 연결된 통신선에서 장치 ID 1~247을 모�
   for (let id = 1; id <= 247 && DAQ.writer; id++) {
     for (const fc of [4, 3]) {
       const r = await mbQuery(id, fc, 1000, 1, 130, 1);
-      if (r.regs || (r.err || '').startsWith('장비 예외')) { alive.push({ id, fc }); mbLog(`ID${id} FC${fc}: ` + (r.regs ? `값 ${sgn16(r.regs[0])}` : '응답함 (이 주소/기능은 없음)')); break; }
+      if (r.regs || (r.err || '').startsWith('장비 예외')) { alive.push({ id, fc }); mbLog(`ID${id} FC${fc}: ` + (r.regs ? `값 ${sgn16(r.regs[0])}` : `응답함 — ${r.err}`)); break; }
     }
     if (id % 50 === 0) mbLog(`… ${id}/247 확인`);
   }
