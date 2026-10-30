@@ -438,6 +438,7 @@ async function mbOpen(port, baud, parity, stop = +S.settings.stop || 1) {
     await portShut(port, null, null); // 이전 연결이 남아 있으면 정리 후 재시도
     try { await port.open(opts); } catch (e2) { throw new Error('포트가 다른 곳에서 사용 중입니다. 페이지를 새로고침(F5)한 뒤 다시 시도하세요. (' + (e2.message || e2) + ')'); }
   }
+  try { const i = port.getInfo ? port.getInfo() : {}; mbLog(`연결한 포트: USB ${(i.usbVendorId ?? 0).toString(16).padStart(4, '0')}:${(i.usbProductId ?? 0).toString(16).padStart(4, '0')} (${baud}/${parity}/정지${stop})`); } catch (e) {}
   DAQ.rx = []; const rd = port.readable.getReader(); DAQ.reader = rd; DAQ.writer = port.writable.getWriter(); DAQ.port = port;
   DAQ.readDone = (async () => {
     try { for (;;) { const { value, done } = await rd.read(); if (done) break; for (const b of value) DAQ.rx.push(b); if (S.settings.dbg) mbLog('RX ' + hex(value)); } } catch (e) {}
@@ -536,21 +537,21 @@ async function mbWatchImpl() { // 장치의 여러 레지스터를 8칸씩 읽�
   }
   DAQ.watch = false; DAQ.pause = false;
 }
-const mbIdScan = () => runTool('장치 ID 탐색', mbIdScanImpl);
-async function mbIdScanImpl() { // 연결된 통신선에서 장치 ID 1~247을 모두 확인하고, 응답한 장치의 흔한 온도 주소 값을 표시
+const mbIdScan = max => runTool('장치 ID 탐색', mbIdScanImpl, typeof max === 'number' ? max : 247);
+async function mbIdScanImpl(max = 247) { // 연결된 통신선에서 장치 ID 1~247을 모두 확인하고, 응답한 장치의 흔한 온도 주소 값을 표시
   if (DAQ.proto !== 'modbus' || !DAQ.writer) return toast('먼저 Modbus로 USB 연결하세요 (연결 후 사용)');
   DAQ.watch = false; DAQ.pause = true; await sleep(600);
   const det = $('#mbLog') && $('#mbLog').closest('details'); if (det) det.open = true;
-  mbLog('=== 장치 ID 전체 탐색 (1~247, 약 1~2분) ===');
+  mbLog(`=== 장치 ID 탐색 (1~${max}, ${max <= 16 ? '약 15초' : '약 1~2분'}) ===`);
   const alive = []; let noisy = 0; const garbled = new Set();
-  for (let id = 1; id <= 247 && DAQ.writer; id++) {
+  for (let id = 1; id <= max && DAQ.writer; id++) {
     for (const fc of [4, 3]) {
       const r = await mbQuery(id, fc, 1000, 1, id <= 16 ? 250 : 130, id <= 16 ? 2 : 1);
       if (r.regs || (r.err || '').startsWith('장비 예외')) { alive.push({ id, fc }); mbLog(`ID${id} FC${fc}: ` + (r.regs ? `값 ${sgn16(r.regs[0])}` : `응답함 — ${r.err}`)); break; }
       const rx = DAQ.lastRx || [], tx = DAQ.lastTx || [];
       if (rx.length && !(rx.length === tx.length && rx.every((b, i) => b === tx[i])) && noisy < 30) { noisy++; garbled.add(id); mbLog(`ID${id} FC${fc}: 신호는 오는데 해석 불가(깨짐) → ${hex(rx.slice(0, 16))}`); }
     }
-    if (id % 50 === 0) mbLog(`… ${id}/247 확인`);
+    if (id % 50 === 0) mbLog(`… ${id}/${max} 확인`);
   }
   const ids = [...new Set(alive.map(a => a.id))];
   mbLog('응답한 장치 ID: ' + (ids.join(', ') || '없음') + (garbled.size ? `  /  깨진 신호가 온 ID: ${[...garbled].join(', ')} (통신 형식 불일치 의심)` : ''));
@@ -743,7 +744,7 @@ function daqPanel() {
         <div><label>RoR 계산 간격 (초, 파이어스코프 기본 60)</label>${sel('rorWin', [30, 60])}</div></div>
       <h3 style="margin-top:14px">Modbus 진단 도구 <span class="muted" style="font-weight:400">(Modbus로 연결한 뒤 사용)</span></h3>
       <div class="row" style="flex-wrap:nowrap"><input id="prSlave" type="number" value="1" title="ID" style="width:70px"><input id="prFc" type="number" value="4" title="기능코드" style="width:70px"><input id="prAddr" type="number" value="1000" title="주소" style="flex:1"><input id="prQty" type="number" value="1" title="개수" style="width:70px"><button class="btn sm" data-act="mbProbe">읽기</button></div>
-      <div class="row" style="margin:8px 0"><span class="muted" style="font-size:12px">시작주소 / 개수</span><input id="wStart" type="number" value="56" style="width:90px"><input id="wCount" type="number" value="64" style="width:90px"><button class="btn sm pri" data-act="mbWatch">📊 실시간 값 표 (켜기/끄기)</button><button class="btn sm" data-act="mbIdScan">🔢 장치 ID 전체 탐색 (1~247)</button><button class="btn sm dan" data-act="mbStop">⏹ 중지</button><button class="btn sm" data-act="mbClear">로그 지우기</button></div>
+      <div class="row" style="margin:8px 0"><span class="muted" style="font-size:12px">시작주소 / 개수</span><input id="wStart" type="number" value="56" style="width:90px"><input id="wCount" type="number" value="64" style="width:90px"><button class="btn sm pri" data-act="mbWatch">📊 실시간 값 표 (켜기/끄기)</button><button class="btn sm pri" data-act="mbIdQuick">⚡ ID 1~16 빠른 확인 (15초)</button><button class="btn sm" data-act="mbIdScan">🔢 장치 ID 전체 탐색 (1~247)</button><button class="btn sm dan" data-act="mbStop">⏹ 중지</button><button class="btn sm" data-act="mbClear">로그 지우기</button></div>
       <div id="mbWatch" class="scroll-x" style="font-size:13px"></div>
       <div class="row" style="margin:8px 0"><label class="row" style="margin:0"><input type="checkbox" style="width:auto" data-set="dbg" ${st.dbg ? 'checked' : ''}> 통신 로그(TX/RX) 표시</label><button class="btn sm" data-act="mbScan">자동 탐색 (ID 1~4)</button><span class="muted" style="font-size:12px">ID / 기능코드 / 주소 / 개수</span></div>
       <pre id="mbLog" style="background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:150px;overflow:auto;margin:0;white-space:pre-wrap">${esc((DAQ.logs || []).join('\n'))}</pre>
@@ -1362,7 +1363,8 @@ document.addEventListener('click', e => {
     case 'mbWatch': if (DAQ.watch) { DAQ.watch = false; break; } mbWatch(); break;
     case 'mbStop': DAQ.abort = true; DAQ.watch = false; toast('중지합니다'); break;
     case 'mbClear': DAQ.logs = []; { const el = $('#mbLog'); if (el) el.textContent = ''; } break;
-    case 'mbIdScan': mbIdScan(); break;
+    case 'mbIdScan': mbIdScan(247); break;
+    case 'mbIdQuick': mbIdScan(16); break;
     case 'setReg': {
       const st = S.settings, k = t.dataset.k, a = +t.dataset.a, sc = Math.abs(+t.dataset.v) >= 500 ? 10 : 1, set = (key, v) => { st[key] = v; const i = $(`[data-set=${key}]`); if (i) i.value = v; };
       if (k === 'bt') { set('mbBtAddr', a); set('mbScale', sc); } else { set('mbEtId', st.mbBtId); set('mbEtAddr', a); set('mbScaleE', sc); }
