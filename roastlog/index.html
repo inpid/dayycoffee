@@ -428,7 +428,7 @@ async function mbClose(port) {
   try { if (w) await w.close(); } catch (e) {}
   try { if (w) w.releaseLock(); } catch (e) {}
   try { if (rd) rd.releaseLock(); } catch (e) {}
-  try { await port.close(); } catch (e) { mbLog('포트 닫기 오류: ' + (e.message || e)); }
+  try { await port.close(); } catch (e) { if (!/already closed/.test(e.message || '')) mbLog('포트 닫기 오류: ' + (e.message || e)); }
   await sleep(350); // USB 시리얼이 안정될 시간
 }
 async function mbReopen(port, baud, parity) { // 닫은 직후 다시 열 때 실패할 수 있어 재시도
@@ -443,10 +443,32 @@ function textStart(port) {
     if (DAQ.reader === reader) { DAQ.mode = null; DAQ.port = null; daqUI(); toast('장비 연결이 끊어졌습니다'); }
   })();
 }
+const plausible = v => (v >= 150 && v <= 3500) || (v >= 15 && v <= 350); // ×10 또는 ×1 온도값으로 보이는 범위
+async function mbAliveIds() {
+  const alive = new Set();
+  for (const id of [1, 2, 3, 4, 5, 6, 7, 8]) for (const fc of [4, 3]) {
+    const r = await mbQuery(id, fc, 1000, 1, 350);
+    if (r.regs || (r.err || '').startsWith('장비 예외')) alive.add(id);
+  }
+  return [...alive];
+}
+async function mbDeepScan(ids) { // 주소 0~2047을 8칸씩 훑어 온도처럼 보이는 레지스터를 모음
+  const cands = [];
+  for (const id of ids) for (const fc of [4, 3]) {
+    let rows = 0;
+    for (let addr = 0; addr < 2048; addr += 8) {
+      const r = await mbQuery(id, fc, addr, 8, 300);
+      if (!r.regs) continue;
+      r.regs.forEach((raw, i) => { const v = sgn16(raw); if (plausible(v)) cands.push({ slave: id, fc, addr: addr + i, v }); });
+      if (r.regs.some(x => x) && rows++ < 30) mbLog(`ID${id} FC${fc} 주소${addr}~${addr + 7}: ${r.regs.map(sgn16).join(' ')}`);
+    }
+  }
+  return cands;
+}
 async function mbScanCore(ids = [1, 2, 3, 4]) {
   const hits = [], alive = new Set();
   for (const slave of ids) for (const fc of [4, 3]) for (const addr of [1000, 0, 1, 1001, 2, 3, 100, 1002]) {
-    const r = await mbQuery(slave, fc, addr, 1, 250);
+    const r = await mbQuery(slave, fc, addr, 1, 350);
     if (r.regs) { const v = sgn16(r.regs[0]); hits.push({ slave, fc, addr, v }); mbLog(`✔ ID${slave} FC${fc} 주소${addr} = ${v} (÷10 = ${(v / 10).toFixed(1)})`); }
     if (r.regs || (r.err || '').startsWith('장비 예외')) alive.add(slave);
   }
@@ -492,18 +514,32 @@ async function mbAutoDetect() { // 통신 설정(보레이트·패리티)부터 
     st.proto = 'text'; save(); await mbClose(port); await port.open({ baudRate: found.baud, dataBits: 8, stopBits: 1, parity: found.parity });
     DAQ.port = port; DAQ.proto = 'text'; DAQ.mode = 'serial'; DAQ.pause = false; textStart(port); daqUI(); return toast('연결되었습니다');
   }
-  mbLog(`=== 통신 확인: ${found.baud}/${found.parity}, 장치 ID ${found.id} 응답 → 온도 레지스터 탐색 ===`);
+  mbLog(`=== 통신 확인: ${found.baud}/${found.parity}, 장치 ID ${found.id} 응답 (원문 ${hex(DAQ.rx.slice(0, 12))}) ===`);
   DAQ.mode = 'serial';
-  const { hits } = await mbScanCore([1, 2, 3, 4]);
-  const ok = hits.filter(h => h.v / 10 >= 0 && h.v / 10 <= 350);
+  const alive = await mbAliveIds(), ids = alive.length ? alive : [found.id];
+  mbLog('응답하는 장치 ID: ' + (alive.join(', ') || '재확인 안 됨'));
+  let ok = (await mbScanCore(ids)).hits.filter(h => plausible(h.v));
+  if (!ok.length) {
+    mbLog('고정 주소에서 못 찾음 → 전체 주소 탐색 (30초~1분)…');
+    const cands = await mbDeepScan(ids);
+    if (cands.length) {
+      mbLog(`후보 ${cands.length}개 — 8초 뒤 값이 변하는지 확인 (온도가 오르는 중이어야 함)`); await sleep(8000);
+      const changed = [];
+      for (const c of cands.slice(0, 80)) {
+        const r = await mbQuery(c.slave, c.fc, c.addr, 1, 300);
+        if (r.regs && sgn16(r.regs[0]) !== c.v) { changed.push({ ...c, v2: sgn16(r.regs[0]) }); mbLog(`변화: ID${c.slave} FC${c.fc} 주소${c.addr}: ${c.v} → ${sgn16(r.regs[0])}`); }
+      }
+      ok = changed;
+    }
+  }
   if (ok.length) {
-    const bt = ok[0], et = ok.find(h => h.slave !== bt.slave && h.fc === bt.fc && h.addr === bt.addr);
-    Object.assign(st, { proto: 'modbus', mbFc: bt.fc, mbBtId: bt.slave, mbBtAddr: bt.addr, mbEtId: et ? et.slave : 0, mbEtAddr: et ? et.addr : bt.addr });
-    save(); mbLog(`=== 자동 설정: BT=ID${bt.slave}, ET=${et ? 'ID' + et.slave : '없음'}, 기능코드 ${bt.fc}, 주소 ${bt.addr} ===\n※ 기계 화면 온도와 같은지 확인하세요. 반대면 설정의 "채널 서로 바꾸기"를 켜세요.`);
+    const bt = ok[0], et = ok.find(h => h !== bt && h.fc === bt.fc && (h.slave !== bt.slave ? h.addr === bt.addr : true)), sc = bt.v > 350 ? 10 : 1;
+    Object.assign(st, { proto: 'modbus', mbFc: bt.fc, mbBtId: bt.slave, mbBtAddr: bt.addr, mbEtId: et ? et.slave : 0, mbEtAddr: et ? et.addr : bt.addr, mbScale: sc });
+    save(); mbLog(`=== 자동 설정: BT=ID${bt.slave}/주소${bt.addr}, ET=${et ? 'ID' + et.slave + '/주소' + et.addr : '없음'}, 기능코드 ${bt.fc}, ÷${sc} ===\n※ 기계 화면 온도와 같은지 확인하세요. 반대면 "채널 서로 바꾸기", 10배 차이면 "값 나누기"를 바꾸세요.`);
     DAQ.pause = false; mbPoll(); daqUI(); toast('자동 설정 완료 — 온도를 확인하세요');
   } else {
-    mbLog('=== 통신은 되지만 온도 값을 못 찾았습니다 === 기계 매뉴얼의 통신 주소표(PV 주소)가 필요합니다. 이 로그를 캡처해 주세요.');
-    DAQ.pause = false; save(); DAQ.mode = 'serial'; mbPoll(); daqUI();
+    mbLog('=== 통신은 되지만 온도 값을 못 찾았습니다 === 이 로그를 캡처해 주세요 (기계 매뉴얼의 통신 주소표가 필요할 수 있습니다).');
+    DAQ.pause = false; save(); mbPoll(); daqUI();
   }
 }
 async function serialConnect() {
