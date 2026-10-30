@@ -401,6 +401,7 @@ async function mbQuery1raw(slave, fc, addr, qty, timeout) {
   try { await DAQ.writer.write(fr); } catch (e) { return { err: '송신 실패' }; }
   const t0 = Date.now();
   while (Date.now() - t0 < timeout) { const r = mbFind(DAQ.rx, slave, fc, qty); if (r) return r; await sleep(8); }
+  DAQ.lastRx = DAQ.rx.slice(); DAQ.lastTx = Array.from(fr);
   return { err: DAQ.rx.length ? '불일치 응답(다른 신호가 섞임)' : '응답 없음' };
 }
 async function mbQuery(slave, fc, addr, qty = 1, timeout = 400, tries = 1) {
@@ -541,16 +542,18 @@ async function mbIdScanImpl() { // 연결된 통신선에서 장치 ID 1~247을 
   DAQ.watch = false; DAQ.pause = true; await sleep(600);
   const det = $('#mbLog') && $('#mbLog').closest('details'); if (det) det.open = true;
   mbLog('=== 장치 ID 전체 탐색 (1~247, 약 1~2분) ===');
-  const alive = [];
+  const alive = []; let noisy = 0; const garbled = new Set();
   for (let id = 1; id <= 247 && DAQ.writer; id++) {
     for (const fc of [4, 3]) {
-      const r = await mbQuery(id, fc, 1000, 1, 130, 1);
+      const r = await mbQuery(id, fc, 1000, 1, id <= 16 ? 250 : 130, id <= 16 ? 2 : 1);
       if (r.regs || (r.err || '').startsWith('장비 예외')) { alive.push({ id, fc }); mbLog(`ID${id} FC${fc}: ` + (r.regs ? `값 ${sgn16(r.regs[0])}` : `응답함 — ${r.err}`)); break; }
+      const rx = DAQ.lastRx || [], tx = DAQ.lastTx || [];
+      if (rx.length && !(rx.length === tx.length && rx.every((b, i) => b === tx[i])) && noisy < 30) { noisy++; garbled.add(id); mbLog(`ID${id} FC${fc}: 신호는 오는데 해석 불가(깨짐) → ${hex(rx.slice(0, 16))}`); }
     }
     if (id % 50 === 0) mbLog(`… ${id}/247 확인`);
   }
   const ids = [...new Set(alive.map(a => a.id))];
-  mbLog('응답한 장치 ID: ' + (ids.join(', ') || '없음'));
+  mbLog('응답한 장치 ID: ' + (ids.join(', ') || '없음') + (garbled.size ? `  /  깨진 신호가 온 ID: ${[...garbled].join(', ')} (통신 형식 불일치 의심)` : ''));
   for (const id of ids) for (const fc of [4, 3]) for (const addr of [1000, 1001, 1002, 0, 1, 2, 3, 100]) {
     const r = await mbQuery(id, fc, addr, 1, 200, 1);
     if (r.regs) { const v = sgn16(r.regs[0]); mbLog(`  ID${id} FC${fc} 주소${addr} = ${v} (÷10=${(v / 10).toFixed(1)})`); }
