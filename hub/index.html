@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TAAS · 타스</title>
+<title>디웍스</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="only light">
 <style>
@@ -897,13 +897,13 @@ function cleanCustom(c){
   const id=str(c.id,60), name=str(c.name,120);
   if(!/^c-[A-Za-z0-9-]+$/.test(id)||!name||!AREA_BY_ID[c.areaId])return null;
   const link=Array.isArray(c.link)&&typeof c.link[0]==='string'&&/^https?:\/\//i.test(String(c.link[1]))?[c.link[0].slice(0,60),String(c.link[1]).slice(0,500)]:null;
-  return {id,areaId:c.areaId,grp:str(c.grp,60,'추가 업무')||'추가 업무',name,short:name.slice(0,20),desc:str(c.desc,2000),how:str(c.how,2000),next:str(c.next,2000,'다음 행동을 입력하세요')||'다음 행동을 입력하세요',lv:['A','S','M'].includes(c.lv)?c.lv:'S',cmd:typeof c.cmd==='string'&&c.cmd?c.cmd.slice(0,500):null,link,legacyKey:null,order:99,createdAt:typeof c.createdAt==='string'?c.createdAt:null};
+  return {id,areaId:c.areaId,grp:str(c.grp,60,'추가 업무')||'추가 업무',name,short:name.slice(0,20),desc:str(c.desc,2000),how:str(c.how,2000),next:str(c.next,2000,'다음 행동을 입력하세요')||'다음 행동을 입력하세요',lv:['A','S','M'].includes(c.lv)?c.lv:'S',cmd:typeof c.cmd==='string'&&c.cmd?c.cmd.slice(0,500):null,link,legacyKey:null,order:99,createdAt:typeof c.createdAt==='string'?c.createdAt:null,u:typeof c.u==='string'?c.u:null};
 }
 function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,updatedAt:null}}
 const catalogIds=st=>[...BASE_TASKS.map(t=>t.id),...st.custom.map(c=>c.id)];
 const defOf=(st,id)=>BASE_TASKS.find(t=>t.id===id)||st.custom.find(c=>c.id===id);
 function blankState(){
-  const st={app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,seedV:SEED_V,tasks:{},custom:[{...cleanCustom({...SHOWCARD}),createdAt:nowIso()}],deleted:{},tax:[],history:[],
+  const st={app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,seedV:SEED_V,tasks:{},custom:[{...cleanCustom({...SHOWCARD}),createdAt:nowIso()}],deleted:{},delStamp:{},purged:{},taxDel:{},tax:[],history:[],
     integrations:Object.fromEntries(INTEGRATIONS.map(i=>[i.id,{connected:false}]))};
   catalogIds(st).forEach(id=>st.tasks[id]=blankTask());
   seedTasks(st,false);
@@ -917,6 +917,7 @@ function rebuildCatalog(){
   TASKS=all.map((t,i)=>({t,i})).filter(x=>!S.deleted[x.t.id]).sort((a,b)=>ai[a.t.areaId]-ai[b.t.areaId]||a.i-b.i).map(x=>x.t);
 }
 function setState(ns){S=ns;rebuildCatalog()}
+function markDel(id,flag){if(flag)S.deleted[id]=nowIso();else delete S.deleted[id];S.delStamp[id]=nowIso()}
 /* 구버전(sr-hub-v2: {"auto:0":0|1|2}) → 현재 형식 */
 function migrateLegacy(){
   let raw=null;try{raw=localStorage.getItem(OLD_KEY)}catch(e){}
@@ -935,10 +936,13 @@ function normalize(raw){
   st.createdAt=typeof raw.createdAt==='string'?raw.createdAt:st.createdAt;
   st.savedAt=typeof raw.savedAt==='string'?raw.savedAt:null;
   st.lastBackupAt=typeof raw.lastBackupAt==='string'?raw.lastBackupAt:null;
-  st.custom=[];st.deleted={};
-  if(Array.isArray(raw.custom))raw.custom.forEach(c=>{const d=cleanCustom(c);if(d&&!st.custom.some(x=>x.id===d.id))st.custom.push(d)});
+  st.custom=[];st.deleted={};st.delStamp={};st.purged={};st.taxDel={};
+  const isoMap=o=>{const r={};if(o&&typeof o==='object'&&!Array.isArray(o))Object.keys(o).forEach(k=>{if(typeof o[k]==='string')r[k]=o[k]});return r};
+  st.purged=isoMap(raw.purged);st.taxDel=isoMap(raw.taxDel);
+  if(Array.isArray(raw.custom))raw.custom.forEach(c=>{const d=cleanCustom(c);if(d&&!st.purged[d.id]&&!st.custom.some(x=>x.id===d.id))st.custom.push(d)});
   const ids=catalogIds(st);st.tasks={};ids.forEach(id=>st.tasks[id]=blankTask());
   if(raw.deleted&&typeof raw.deleted==='object')Object.keys(raw.deleted).forEach(id=>{if(ids.includes(id))st.deleted[id]=typeof raw.deleted[id]==='string'?raw.deleted[id]:nowIso()});
+  st.delStamp=Object.fromEntries(Object.entries(isoMap(raw.delStamp)).filter(([k])=>ids.includes(k)));
   const src=raw.tasks&&typeof raw.tasks==='object'?raw.tasks:{};
   ids.forEach(id=>{const r=src[id];if(!r||typeof r!=='object')return;const o=st.tasks[id],d=defOf(st,id);
     if(STATUS[r.status])o.status=r.status;
@@ -949,7 +953,7 @@ function normalize(raw){
     if(typeof r.next==='string'&&r.next!==d.next)o.next=r.next.slice(0,2000);
     if(typeof r.updatedAt==='string')o.updatedAt=r.updatedAt;
   });
-  if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true}));
+  if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).filter(x=>!st.taxDel[String(x.id||'')]).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true,u:typeof x.u==='string'?x.u:null}));
   if(Array.isArray(raw.history))st.history=raw.history.filter(h=>h&&typeof h==='object'&&typeof h.t==='string').slice(-600);
   /* 이전 버전 데이터: 실제로 하는 업무만 남기도록 한 번 정리 */
   if(raw.seedV!==SEED_V){
@@ -970,11 +974,12 @@ function load(){
   setState(mig||blankState());
   if(mig)save();
 }
-function save(){
+function persistLocal(){
   S.savedAt=nowIso();
   try{localStorage.setItem(KEY,JSON.stringify(S));storageOk=true}catch(e){storageOk=false}
   renderSaveChip();
 }
+function save(){persistLocal();if(typeof sync!=='undefined'&&sync.on&&!sync.applying)markDirty()}
 
 /* =====================================================================
    업무 조회
@@ -1090,7 +1095,7 @@ function renderNav(){
   const st=stats(allTasks());
   const cur=V.view==='area'?'area:'+V.area:V.view;
   const btn=(k,label,hash,extra='',c='')=>`<button class="nb" data-go="${hash}" ${cur===k?'aria-current="page"':''} ${c?`style="--c:${c}"`:''}>${extra}<span>${label}</span></button>`;
-  let h=`<div class="brand"><b>TAAS</b><span>타스 · 사업 운영 대시보드</span></div>`;
+  let h=`<div class="brand"><b>디웍스</b><span>사업 운영 대시보드</span></div>`;
   h+=btn('home','대시보드','home')+`<button class="nb" data-go="all" ${cur==='all'?'aria-current="page"':''}><span>전체 업무</span><span class="n">${st.total}</span></button>`;
   h+=`<h3>업무 영역</h3>`;
   AREAS.forEach(a=>{const s=stats(allTasks().filter(t=>t.areaId===a.id));
@@ -1099,11 +1104,11 @@ function renderNav(){
   h+=`<div class="grow"></div>`;
   const n=$('#nav');n.innerHTML=h;n.classList.toggle('on',V.navOpen);
 }
-function renderSaveChip(){const c=$('#saveChip');if(c)c.innerHTML=storageOk?`저장됨 · ${S.savedAt?fmtTime(S.savedAt):'—'}`:'⚠ 브라우저에 저장할 수 없음'}
+function renderSaveChip(){const c=$('#saveChip');if(c)c.innerHTML=storageOk?`저장됨 · ${S.savedAt?fmtTime(S.savedAt):'—'}`:'⚠ 브라우저에 저장할 수 없음';if(typeof renderSyncChip==='function')renderSyncChip()}
 function header(title,sub){
   const d=new Date();
-  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">TAAS · 타스</div><h1>${title}</h1><p>${sub}</p></div>
-  <div class="meta"><span class="chip">${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})</span><span class="chip" id="saveChip"></span>
+  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">디웍스</div><h1>${title}</h1><p>${sub}</p></div>
+  <div class="meta"><span class="chip">${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})</span><span class="chip" id="saveChip"></span><span class="chip" id="syncChip"></span>
   <button class="btn pri sm" data-act="newtask">+ 업무 추가</button><button class="btn sm" data-act="undo" ${undoable()?'':'disabled'} title="Ctrl+Z">↩ 실행 취소</button></div></header>`;
 }
 function tagsFor(t,withArea){
@@ -1286,6 +1291,10 @@ function renderData(){
     <p class="res" style="margin-top:12px">내보내기에는 5개 영역·전체 업무 정보, 진행 상태, 중요도, 목표일, 실제 실행 여부, 메모, 세무 확정 일정, 변경 이력이 모두 포함됩니다.</p>
     ${snap?`<div class="note" style="margin-top:8px">직전 가져오기/초기화 전 상태가 저장되어 있습니다 (${fmtFull(snap.at)}). <button class="btn sm" data-act="restoresnap" style="margin-left:6px">그 상태로 되돌리기</button></div>`:''}
    </section>
+   <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">기기 간 동기화 <span class="tg" id="syncTag"></span></h3>
+    <p class="res" id="syncInfo" style="margin-bottom:10px"></p>
+    <div class="row2"><button class="btn sm" data-act="syncnow">지금 동기화</button></div>
+    <p class="res" style="margin-top:10px">같은 claude.ai 계정(소유자)으로 열면 매장·집·휴대폰이 같은 데이터를 봅니다. 두 곳에서 같은 업무를 동시에 고치면 더 늦게 수정한 쪽이 남습니다. Claude 채팅 기록은 동기화하지 않고 각 기기에 따로 보관합니다.</p></section>
    <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">저장 정보</h3>
     <table class="tbl"><tbody><tr><td>데이터 버전</td><td>v${VER}</td></tr><tr><td>마지막 저장</td><td>${fmtFull(S.savedAt)}</td></tr><tr><td>저장 용량</td><td>${size}</td></tr><tr><td>저장 위치</td><td>${storageOk?'이 브라우저(LocalStorage)':'<b>저장 불가</b>'}</td></tr></tbody></table></section>
    <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">외부 서비스 연동</h3>
@@ -1355,7 +1364,7 @@ function renderAll(){
   m.innerHTML=V.view==='home'?renderHome():V.view==='data'?renderData():V.view==='tax'?renderTax():renderList();
   renderSaveChip();
   if(keep){const q=$('#q');if(q){q.focus();q.setSelectionRange(keep.pos,keep.pos)}}
-  document.title=V.view==='home'?'TAAS 타스':((V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · TAAS 타스');
+  document.title=V.view==='home'?'디웍스':((V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · 디웍스');
   if(V.openId)renderDrawerKeep();
 }
 function renderDrawerKeep(){const y=$('#drawer').scrollTop;const f=document.activeElement&&document.activeElement.id;renderDrawer();$('#drawer').scrollTop=y;if(f){const e=document.getElementById(f);if(e&&e.focus&&f!=='dtitle')e.focus()}}
@@ -1374,7 +1383,7 @@ function exportData(){
      priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt,deleted:!!S.deleted[id]}});
   const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,customTasks:S.custom,deleted:S.deleted,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
   const json=JSON.stringify(doc,null,2);
-  const d=new Date(),name=`taas-center-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  const d=new Date(),name=`dworks-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const done=()=>{S.lastBackupAt=nowIso();save();renderAll();toast('JSON 백업을 저장했습니다: '+name)};
   const viaLink=()=>{const blob=new Blob([json],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);done()};
   // claude.ai 안에서 열었을 때는 downloads 기능으로, 파일로 직접 열었을 때는 일반 다운로드로 저장
@@ -1459,7 +1468,7 @@ function doImport(mode){
   }else{
     const have=new Set(S.custom.map(c=>c.id));
     incoming.custom.forEach(c=>{if(!have.has(c.id)){S.custom.push(c);S.tasks[c.id]=blankTask()}});
-    Object.keys(v.tasks).forEach(id=>{S.tasks[id]=incoming.tasks[id];if(v.hasDeleted){if(v.deleted[id])S.deleted[id]=v.deleted[id];else delete S.deleted[id]}});
+    Object.keys(v.tasks).forEach(id=>{S.tasks[id]=incoming.tasks[id];if(v.hasDeleted){markDel(id,!!v.deleted[id])}});
     const ids=new Set(S.tax.map(x=>x.id));incoming.tax.forEach(x=>{if(!ids.has(x.id))S.tax.push(x)});
     const hid=new Set(S.history.map(h=>h.id));incoming.history.forEach(h=>{if(!hid.has(h.id))S.history.push(h)});
     S.history.sort((a,b)=>a.t.localeCompare(b.t));
@@ -1524,7 +1533,7 @@ function submitTaskForm(form){
     const c=S.custom.find(x=>x.id===id);if(!c)return;
     const d=cleanCustom({...c,...f,name,id});if(!d)return;
     const keepNext=S.tasks[id].next;
-    Object.assign(c,d,{createdAt:c.createdAt});
+    Object.assign(c,d,{createdAt:c.createdAt,u:nowIso()});
     S.tasks[id].next=keepNext===c.next?null:keepNext;
     S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 정보 수정`});
     rebuildCatalog();save();closeDlg();renderAll();toast('수정했습니다');return;
@@ -1544,7 +1553,7 @@ function createCustomTask(f,by){
 }
 function deleteCore(id,by){
   flushTyping();const name=TASK_BY_ID[id].name;
-  S.deleted[id]=nowIso();
+  markDel(id,true);
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 삭제 (복원 가능)${by?' · '+by:''}`});
   if(V.openId===id){V.openId=null;$('#ov').classList.remove('on');const d=$('#drawer');d.classList.remove('on');d.setAttribute('aria-hidden','true')}
   rebuildCatalog();save();
@@ -1561,14 +1570,14 @@ function doDelete(id){
 }
 function restoreTask(id,quiet){
   if(!S.deleted[id])return;
-  delete S.deleted[id];
+  markDel(id,false);
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${TASK_BY_ID[id].name}" 복원`});
   rebuildCatalog();save();renderAll();toast('복원했습니다');
 }
 function purgeTask(id){
   const c=S.custom.find(x=>x.id===id);if(!c||!S.deleted[id])return;
   if(!confirm(`"${c.name}" 업무를 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`))return;
-  S.custom=S.custom.filter(x=>x.id!==id);delete S.tasks[id];delete S.deleted[id];
+  S.custom=S.custom.filter(x=>x.id!==id);delete S.tasks[id];delete S.deleted[id];delete S.delStamp[id];S.purged[id]=nowIso();
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${c.name}" 완전 삭제`});
   rebuildCatalog();save();renderAll();toast('완전히 삭제했습니다');
 }
@@ -1611,6 +1620,7 @@ document.addEventListener('click',e=>{
     case 'restoresnap':restoreSnap();break;
     case 'reset':resetFlow();break;
     case 'doreset':doReset();break;
+    case 'syncnow':syncNow();break;
     case 'newtask':taskForm();break;
     case 'edittask':taskForm(V.openId);break;
     case 'deltask':deleteFlow(V.openId);break;
@@ -1621,8 +1631,8 @@ document.addEventListener('click',e=>{
     case 'taxcancel':V.taxForm=null;renderAll();break;
     case 'taxfromref':{const r=TAX_REF[+el.dataset.i];V.taxForm={name:r.n,date:'',memo:'',hint:`참고: 일반적으로 ${r.note}. 실제 신고일은 사업자 유형에 따라 다르므로 직접 확인한 날짜를 입력하세요.`};renderAll();$('#taxForm')&&$('#taxForm').scrollIntoView({block:'center',behavior:reduceMotion()?'auto':'smooth'});break}
     case 'taxedit':{const x=S.tax.find(z=>z.id===id);if(x){V.taxForm={...x};renderAll();$('#taxForm')&&$('#taxForm').scrollIntoView({block:'center'})}break}
-    case 'taxdone':{const x=S.tax.find(z=>z.id===id);if(x){x.done=!x.done;S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" ${x.done?'완료 처리':'완료 취소'}`});save();renderAll()}break}
-    case 'taxdel':{const x=S.tax.find(z=>z.id===id);if(x&&confirm(`"${x.name}" 일정을 삭제할까요?`)){S.tax=S.tax.filter(z=>z.id!==id);S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" 삭제`});save();renderAll()}break}
+    case 'taxdone':{const x=S.tax.find(z=>z.id===id);if(x){x.done=!x.done;x.u=nowIso();S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" ${x.done?'완료 처리':'완료 취소'}`});save();renderAll()}break}
+    case 'taxdel':{const x=S.tax.find(z=>z.id===id);if(x&&confirm(`"${x.name}" 일정을 삭제할까요?`)){S.tax=S.tax.filter(z=>z.id!==id);S.taxDel[id]=nowIso();S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" 삭제`});save();renderAll()}break}
   }
 });
 document.addEventListener('submit',e=>{
@@ -1631,8 +1641,8 @@ document.addEventListener('submit',e=>{
   const fd=new FormData(e.target),name=String(fd.get('name')||'').trim(),date=String(fd.get('date')||''),memo=String(fd.get('memo')||'').trim();
   if(!name||!isDate(date)){toast('이름과 날짜를 확인하세요');return}
   const f=V.taxForm;
-  if(f&&f.id){const x=S.tax.find(z=>z.id===f.id);if(x){x.name=name;x.date=date;x.memo=memo}S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${name}" 수정(${date})`})}
-  else{S.tax.push({id:uid(),name,date,memo,done:false});S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 확정 일정 "${name}" 입력(${date})`})}
+  if(f&&f.id){const x=S.tax.find(z=>z.id===f.id);if(x){x.name=name;x.date=date;x.memo=memo;x.u=nowIso()}S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${name}" 수정(${date})`})}
+  else{S.tax.push({id:uid(),name,date,memo,done:false,u:nowIso()});S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 확정 일정 "${name}" 입력(${date})`})}
   V.taxYear=+date.slice(0,4);V.taxForm=null;save();renderAll();toast('저장했습니다');
 });
 document.addEventListener('input',e=>{
@@ -1691,7 +1701,7 @@ async function getSample(){
   try{chat.sample=(window.claude&&typeof window.claude.use==='function')?await window.claude.use('sample'):null}catch(e){chat.sample=null}
   return chat.sample;
 }
-const CHAT_RULES=`당신은 "타스(TAAS)"의 운영 비서입니다. 사용자는 제주의 커피 로스터리 브랜드 "스탠다드 로스트"를 혼자 키우며, 이 프로그램으로 업무를 관리합니다. 당신은 직원처럼 업무를 정리·제안·실행합니다.
+const CHAT_RULES=`당신은 "디웍스"의 운영 비서입니다. 사용자는 제주의 커피 로스터리 브랜드 "스탠다드 로스트"를 혼자 키우며, 이 프로그램으로 업무를 관리합니다. 당신은 직원처럼 업무를 정리·제안·실행합니다.
 
 규칙:
 1. 한국어로, 짧고 실용적으로 답합니다. 장황한 서론과 칭찬은 하지 않습니다.
@@ -1754,7 +1764,7 @@ function chatTools(bot){
     execute(i){
       const id=String(i.id||'');if(!TASK_BY_ID[id]||S.deleted[id])throw new Error('없는 업무 id입니다: '+id);
       const name=TASK_BY_ID[id].name;deleteCore(id,'Claude');renderAll();
-      log(`업무 삭제(휴지통): ${name}`,()=>{if(S.deleted[id]){delete S.deleted[id];S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 복원 · Claude 되돌리기`});rebuildCatalog();save();renderAll()}});
+      log(`업무 삭제(휴지통): ${name}`,()=>{if(S.deleted[id]){markDel(id,false);S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 복원 · Claude 되돌리기`});rebuildCatalog();save();renderAll()}});
       return '삭제했습니다(휴지통에서 복원 가능)';
     }}
   ];
@@ -1778,7 +1788,7 @@ function renderChat(){
 }
 function openChat(){
   chat.open=true;const el=$('#chat');
-  el.innerHTML=`<div class="ch-h"><b>💬 Claude · 타스 비서</b><label class="sr" for="chtier">답변 방식</label><select id="chtier" data-act="chattier"><option value="quick">빠르게</option><option value="default">보통</option><option value="complex">깊게</option></select><button class="btn sm" data-act="chatclear" title="대화 지우기">지우기</button><button class="btn sm" data-act="chatclose" aria-label="채팅 닫기">✕</button></div>
+  el.innerHTML=`<div class="ch-h"><b>💬 Claude · 디웍스 비서</b><label class="sr" for="chtier">답변 방식</label><select id="chtier" data-act="chattier"><option value="quick">빠르게</option><option value="default">보통</option><option value="complex">깊게</option></select><button class="btn sm" data-act="chatclear" title="대화 지우기">지우기</button><button class="btn sm" data-act="chatclose" aria-label="채팅 닫기">✕</button></div>
   <div class="ch-m" role="log" aria-live="polite"></div>
   <div class="sug"><button data-sug="오늘 뭐부터 하면 좋을지 우선순위를 정해줘">오늘 뭐부터?</button><button data-sug="지금 업무 진행 상황을 요약해줘">진행 요약</button><button data-sug="이번 주 해야 할 일을 업무로 만들어줘">이번 주 계획</button></div>
   <div class="ch-f"><form id="chatform"><label class="sr" for="chatin">Claude에게 보낼 메시지</label><textarea id="chatin" rows="1" placeholder="메시지 입력 (Enter 전송)"></textarea><button class="btn pri" id="chatsend" type="submit" data-act="chatsendbtn">보내기</button></form>
@@ -1832,10 +1842,139 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('input',e=>{if(e.target.id==='chatin'){e.target.style.height='auto';e.target.style.height=Math.min(120,e.target.scrollHeight)+'px'}});
 
+
+/* =====================================================================
+   기기 간 동기화 — claude.ai 에서 연 화면의 `db` 기능(소유자 전용)에 저장합니다.
+   로컬에 먼저 저장하고, 변경이 멈추면 서버와 병합해서 올립니다.
+   ===================================================================== */
+const sync={on:false,status:'off',msg:'',db:null,tref:null,href:null,busy:false,again:false,t:null,lastPayload:'',applying:false,first:true,timer:null,at:null,
+  device:(()=>{try{let d=localStorage.getItem('dworks-device');if(!d){d=uid();localStorage.setItem('dworks-device',d)}return d}catch(e){return uid()}})()};
+function setSync(status,msg){sync.status=status;sync.msg=msg||'';renderSyncChip()}
+function renderSyncChip(){
+  const L={off:'이 기기에만 저장',readonly:'동기화: 소유자 전용',connecting:'동기화 연결 중…',synced:'동기화됨 · '+(sync.at?fmtTime(sync.at):''),pending:'동기화 대기…',pushing:'동기화 중…',error:'⚠ 동기화 오류'};
+  const c=$('#syncChip');if(c){c.textContent=L[sync.status]||'';c.title=sync.msg||''}
+  const i=$('#syncInfo');if(i)i.textContent=sync.msg||(sync.status==='synced'?'정상적으로 동기화되어 있습니다.':'');
+  const g=$('#syncTag');if(g)g.textContent=L[sync.status]||'';
+}
+const stable=v=>Array.isArray(v)?'['+v.map(stable).join(',')+']':(v&&typeof v==='object')?'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}':JSON.stringify(v);
+const byCreated=(a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||a.id.localeCompare(b.id);
+function packTasks(st){
+  return stable({v:VER,seedV:st.seedV,lastBackupAt:st.lastBackupAt||null,tasks:st.tasks,custom:[...st.custom].sort(byCreated),deleted:st.deleted,delStamp:st.delStamp,purged:st.purged,tax:[...st.tax].sort((p,q)=>p.date.localeCompare(q.date)||p.id.localeCompare(q.id)),taxDel:st.taxDel});
+}
+function packHist(st){
+  let h=[...st.history].sort((a,b)=>a.t.localeCompare(b.t)||String(a.id).localeCompare(String(b.id))).slice(-300),s=JSON.stringify(h);
+  while(s.length>180000&&h.length>20){h=h.slice(Math.ceil(h.length/4));s=JSON.stringify(h)}
+  return s;
+}
+function unpack(tp,hp){const o=JSON.parse(tp);let h=[];try{h=JSON.parse(hp||'[]')}catch(e){}if(!Array.isArray(h))h=[];return normalize({...o,history:h})}
+const newer=(x,y,kx,ky)=>{const a=String(x[kx]||''),b=String(y[ky||kx]||'');return a>b?x:b>a?y:(stable(x)>=stable(y)?x:y)};
+function mergeStates(a,b){
+  const M=JSON.parse(JSON.stringify(a));
+  M.purged={...(b.purged||{}),...(a.purged||{})};
+  const byId=new Map();
+  [...(b.custom||[]),...a.custom].forEach(c=>{const o=byId.get(c.id);byId.set(c.id,o?newer(c,o,'u'):c)});
+  M.custom=[...byId.values()].filter(c=>!M.purged[c.id]).map(c=>JSON.parse(JSON.stringify(c))).sort(byCreated);
+  const ids=[...BASE_TASKS.map(t=>t.id),...M.custom.map(c=>c.id)],idset=new Set(ids);
+  M.tasks={};
+  ids.forEach(id=>{const x=a.tasks[id],y=b.tasks[id];M.tasks[id]=JSON.parse(JSON.stringify(!x?(y||blankTask()):!y?x:newer(x,y,'updatedAt')))});
+  const dk=new Set([...Object.keys(a.delStamp||{}),...Object.keys(b.delStamp||{}),...Object.keys(a.deleted||{}),...Object.keys(b.deleted||{})]);
+  M.deleted={};M.delStamp={};
+  dk.forEach(id=>{
+    if(!idset.has(id))return;
+    const sa=(a.delStamp||{})[id]||'',sb=(b.delStamp||{})[id]||'',da=(a.deleted||{})[id],db=(b.deleted||{})[id];
+    let del,val,st;
+    if(sa===sb){del=da!==undefined||db!==undefined;val=[da,db].filter(Boolean).sort().pop();st=sa}
+    else if(sa>sb){del=da!==undefined;val=da;st=sa}else{del=db!==undefined;val=db;st=sb}
+    if(del)M.deleted[id]=val||st||'1970-01-01T00:00:00.000Z';
+    if(st)M.delStamp[id]=st;
+  });
+  M.taxDel={...(b.taxDel||{}),...(a.taxDel||{})};
+  const tm=new Map();
+  [...(b.tax||[]),...a.tax].forEach(x=>{const o=tm.get(x.id);tm.set(x.id,o?newer(x,o,'u'):x)});
+  M.tax=[...tm.values()].filter(x=>!M.taxDel[x.id]).map(x=>JSON.parse(JSON.stringify(x)));
+  const hm=new Map();[...(b.history||[]),...a.history].forEach(h=>{if(h&&h.id)hm.set(h.id,h)});
+  M.history=[...hm.values()].sort((p,q)=>p.t.localeCompare(q.t)||String(p.id).localeCompare(String(q.id))).slice(-600);
+  M.lastBackupAt=[a.lastBackupAt,b.lastBackupAt].filter(Boolean).sort().pop()||null;
+  M.seedV=Math.max(a.seedV||0,b.seedV||0);
+  M.createdAt=[a.createdAt,b.createdAt].filter(Boolean).sort()[0]||M.createdAt;
+  return M;
+}
+function applyMerged(M){
+  sync.applying=true;
+  try{setState(M);persistLocal();renderAll()}finally{sync.applying=false}
+}
+function withIdle(fn,tries=0){
+  const a=document.activeElement,busy=a&&a.matches&&a.matches('#drawer textarea,#drawer input,#chatin,#dlg input,#dlg textarea');
+  if(busy&&tries<10)return new Promise(r=>setTimeout(()=>r(withIdle(fn,tries+1)),1500));
+  return fn();
+}
+function markDirty(){
+  if(!sync.on)return;
+  setSync('pending');clearTimeout(sync.t);sync.t=setTimeout(()=>syncPush(),1200);
+}
+const syncErrMsg=e=>{const c=e&&e.code;return c==='quota_exceeded'?'동기화 저장 공간이 가득 찼습니다.':c==='invalid_argument'?'이 계정에는 동기화 쓰기 권한이 없습니다(소유자 계정으로 열어 주세요).':c==='resource_exhausted'?'요청이 너무 잦습니다. 잠시 후 자동으로 다시 시도합니다.':'서버에 연결하지 못했습니다. 이 기기에는 계속 저장됩니다.'};
+async function readRemote(){
+  const rs=await sync.tref.get();
+  if(!rs.exists||!rs.data()||typeof rs.data().payload!=='string')return null;
+  let hp='[]';try{const hs=await sync.href.get();if(hs.exists&&hs.data()&&typeof hs.data().payload==='string')hp=hs.data().payload}catch(e){}
+  return {payload:rs.data().payload,remote:unpack(rs.data().payload,hp)};
+}
+async function syncPush(initial){
+  if(!sync.db)return;
+  if(sync.busy){sync.again=true;return}
+  sync.busy=true;setSync('pushing');
+  try{
+    flushTyping();
+    if(!initial){
+      const r=await readRemote();
+      if(r){const M=mergeStates(S,r.remote);if(packTasks(M)!==packTasks(S)||M.history.length!==S.history.length)applyMerged(M)}
+    }
+    const p=packTasks(S);
+    if(p.length>230000){setSync('error','데이터가 너무 커서 동기화할 수 없습니다. 메모를 줄이거나 JSON으로 백업하세요.');return}
+    if(p!==sync.lastPayload){
+      await sync.tref.set({payload:p,device:sync.device,at:nowIso()});
+      sync.lastPayload=p;
+      try{await sync.href.set({payload:packHist(S),at:nowIso()})}catch(e){}
+    }
+    sync.on=true;sync.at=nowIso();setSync('synced');
+    if(initial)toast('이 기기의 데이터를 동기화 서버에 올렸습니다');
+  }catch(e){setSync('error',syncErrMsg(e))}
+  finally{sync.busy=false;if(sync.again){sync.again=false;markDirty()}}
+}
+async function onRemote(snap){
+  clearTimeout(sync.timer);
+  const definitive=!snap.metadata||!snap.metadata.fromCache;
+  if(!snap.exists){if(definitive){sync.on=true;await syncPush(true)}return}
+  const d=snap.data();if(!d||typeof d.payload!=='string')return;
+  if(d.payload===sync.lastPayload){sync.on=true;if(definitive){sync.at=sync.at||nowIso();setSync('synced')}return}
+  await withIdle(async()=>{
+    let hp='[]';try{const hs=await sync.href.get();if(hs.exists&&hs.data()&&typeof hs.data().payload==='string')hp=hs.data().payload}catch(e){}
+    let remote;try{remote=unpack(d.payload,hp)}catch(e){setSync('error','서버 데이터를 읽지 못했습니다.');return}
+    const M=mergeStates(S,remote);
+    const changed=packTasks(M)!==packTasks(S)||M.history.length!==S.history.length;
+    sync.lastPayload=d.payload;sync.on=true;
+    if(changed){if(sync.first)snapshot();applyMerged(M);toast('다른 기기의 변경 사항을 가져왔습니다')}
+    sync.first=false;
+    if(definitive&&packTasks(M)!==d.payload)syncPush();else{sync.at=nowIso();setSync('synced')}
+  });
+}
+function syncNow(){if(!sync.db){toast(sync.msg||'동기화를 쓸 수 없는 화면입니다');return}syncPush()}
+async function syncInit(){
+  try{
+    if(!(window.claude&&typeof window.claude.use==='function')){setSync('off','claude.ai에서 연 화면에서만 기기 간 동기화가 됩니다. 지금은 이 기기에만 저장됩니다.');return}
+    const [db,user]=await Promise.all([window.claude.use('db'),window.claude.use('user')]);
+    if(!db){setSync('off','이 화면에서는 동기화를 쓸 수 없습니다. 이 기기에만 저장됩니다.');return}
+    if(user){let own=true;try{own=await user.isOwner()}catch(e){}if(!own){setSync('readonly','동기화는 이 프로그램을 올린 소유자 계정으로 열었을 때만 됩니다. 이 기기에만 저장됩니다.');return}}
+    sync.db=db;sync.tref=db.doc('sync/tasks');sync.href=db.doc('sync/history');setSync('connecting');
+    sync.timer=setTimeout(()=>{if(sync.status==='connecting')setSync('error','서버 응답이 없습니다. 이 기기에는 계속 저장되고, 연결되면 자동으로 동기화합니다.')},10000);
+    sync.unsub=sync.tref.onSnapshot(snap=>{onRemote(snap).catch(()=>setSync('error','동기화 중 오류가 발생했습니다.'))},err=>{sync.on=false;setSync('error','동기화 연결이 끊겼습니다. 새로고침하면 다시 연결합니다.')});
+  }catch(e){setSync('error','동기화를 시작하지 못했습니다.')}
+}
+
 /* =====================================================================
    시작
    ===================================================================== */
-load();parseHash();renderAll();
+load();parseHash();renderAll();syncInit();
 </script>
 </body>
 </html>
