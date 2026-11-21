@@ -1,4 +1,4 @@
 # dayycoffee
 
 - `index.html` 중문로스터리 사이트
-- `hub/index.html` 업무 허브 (점·선 구 클러스터 그래프, 클릭하면 안으로 진입)
+- `hub/index.html` COMMAND CENTER 업무 관리 대시보드 (단일 HTML, LocalStorage 저장)
