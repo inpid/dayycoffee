@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>TAAS CENTER · 타스센터</title>
+<title>TAAS · 타스</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="only light">
 <style>
@@ -843,8 +843,8 @@ let S=null, storageOk=true;
 const SEED_EXISTING={
   'auto-0':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /news (스탠다드로스트 픽셀 캐릭터 도트판 카드뉴스 + 캡션 + 블로그 글)'},
   'auto-3':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /w-news (매주 월요일 신문 지면 카드뉴스 + 캡션 + 블로그)'},
-  'roast-0':{status:'live',executed:true,memo:'기존 운영 중: TAAS 로스팅 프로그램. Claude 스킬 /taas — 일반 채팅에서는 수정 요청을 대기 목록에 모으고 Code에서 한 번에 반영'},
-  'roast-2':{status:'test',executed:false,memo:'TAAS 로그 기록 — 이미 쓰고 있다면 "운영 중"으로 바꾸고 실제 실행을 체크하세요'},
+  'roast-0':{status:'live',executed:true,memo:'기존 운영 중: 타스(TAAS) 로스팅 프로그램. Claude 스킬 /taas — 일반 채팅에서는 수정 요청을 대기 목록에 모으고 Code에서 한 번에 반영'},
+  'roast-2':{status:'live',executed:true,memo:'기존 운영 중: 타스로그(TAAS LOG) — 타스에서 파생된 로그 프로그램'},
   'auto-5':{status:'test',executed:false,memo:'기존 구축: Claude 스킬 /morning (아침 브리핑). 실제 사용 중이면 운영 중으로 변경'},
   'tax-0':{status:'test',executed:false,memo:'기존 구축: 카드·영수증 내역 → 장부/세무사 전달용 CSV 정리 스킬. 실제 사용 중이면 운영 중으로 변경'},
   'money-3':{status:'test',executed:false,memo:'기존 구축: 정부지원사업 탐색 스킬(K-Startup·기업마당·소상공인). 실제 사용 중이면 운영 중으로 변경'},
@@ -858,7 +858,13 @@ function seedTasks(st,onlyUntouched){
     if(onlyUntouched&&!(o.status==='idea'&&!o.updatedAt&&!o.memo&&!o.executed))return;
     o.status=v.status;o.executed=v.executed;o.memo=v.memo;n++;
   });
-  st.seedV=1;return n;
+  st.seedV=2;return n;
+}
+const OLD_R2_MEMO='TAAS 로그 기록 — 이미 쓰고 있다면 "운영 중"으로 바꾸고 실제 실행을 체크하세요';
+function seedPatchV2(st){
+  const o=st.tasks['roast-2'],v=SEED_EXISTING['roast-2'];
+  if(o&&((o.status==='test'&&!o.executed&&o.memo===OLD_R2_MEMO)||(o.status==='idea'&&!o.updatedAt&&!o.memo&&!o.executed))){o.status=v.status;o.executed=v.executed;o.memo=v.memo;return 1}
+  return 0;
 }
 function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,updatedAt:null}}
 function blankState(){
@@ -898,15 +904,16 @@ function normalize(raw){
   });
   if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true}));
   if(Array.isArray(raw.history))st.history=raw.history.filter(h=>h&&typeof h==='object'&&typeof h.t==='string').slice(-600);
-  if(raw.seedV!==1){const n=seedTasks(st,true);if(n)st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`기존에 운영·구축해 둔 자동화 ${n}건(TAAS, 카드뉴스 등)을 이전했습니다. 상태는 직접 확인해 조정하세요.`})}
-  st.seedV=1;
+  if(raw.seedV!==1&&raw.seedV!==2){const n=seedTasks(st,true);if(n)st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`기존에 운영·구축해 둔 자동화 ${n}건(타스, 카드뉴스 등)을 이전했습니다. 상태는 직접 확인해 조정하세요.`})}
+  else if(raw.seedV===1&&seedPatchV2(st))st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'타스로그를 타스에서 파생된 운영 중 프로그램으로 반영했습니다.'});
+  st.seedV=2;
   if(raw.integrations&&typeof raw.integrations==='object')INTEGRATIONS.forEach(i=>{if(raw.integrations[i.id])st.integrations[i.id]={connected:false}}); // 이번 버전은 연동 미구현 → 항상 미연결
   return st;
 }
 function load(){
   let raw=null;
   try{raw=localStorage.getItem(KEY)}catch(e){storageOk=false}
-  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){S=normalize(o);if(o.seedV!==1)save();return}}catch(e){}}
+  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){S=normalize(o);if(o.seedV!==2)save();return}}catch(e){}}
   const mig=migrateLegacy();
   S=mig||blankState();
   if(mig)save();
@@ -1031,7 +1038,7 @@ function renderNav(){
   const st=stats(allTasks());
   const cur=V.view==='area'?'area:'+V.area:V.view;
   const btn=(k,label,hash,extra='',c='')=>`<button class="nb" data-go="${hash}" ${cur===k?'aria-current="page"':''} ${c?`style="--c:${c}"`:''}>${extra}<span>${label}</span></button>`;
-  let h=`<div class="brand"><b>TAAS CENTER</b><span>타스센터 · 사업 운영 대시보드</span></div>`;
+  let h=`<div class="brand"><b>TAAS</b><span>타스 · 사업 운영 대시보드</span></div>`;
   h+=btn('home','대시보드','home')+`<button class="nb" data-go="all" ${cur==='all'?'aria-current="page"':''}><span>전체 업무</span><span class="n">${st.total}</span></button>`;
   h+=`<h3>업무 영역</h3>`;
   AREAS.forEach(a=>{const s=stats(allTasks().filter(t=>t.areaId===a.id));
@@ -1043,7 +1050,7 @@ function renderNav(){
 function renderSaveChip(){const c=$('#saveChip');if(c)c.innerHTML=storageOk?`저장됨 · ${S.savedAt?fmtTime(S.savedAt):'—'}`:'⚠ 브라우저에 저장할 수 없음'}
 function header(title,sub){
   const d=new Date();
-  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">TAAS CENTER · 타스센터</div><h1>${title}</h1><p>${sub}</p></div>
+  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">TAAS · 타스</div><h1>${title}</h1><p>${sub}</p></div>
   <div class="meta"><span class="chip">${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})</span><span class="chip" id="saveChip"></span>
   <button class="btn sm" data-act="undo" ${undoable()?'':'disabled'} title="Ctrl+Z">↩ 실행 취소</button></div></header>`;
 }
@@ -1288,7 +1295,7 @@ function renderAll(){
   m.innerHTML=V.view==='home'?renderHome():V.view==='data'?renderData():V.view==='tax'?renderTax():renderList();
   renderSaveChip();
   if(keep){const q=$('#q');if(q){q.focus();q.setSelectionRange(keep.pos,keep.pos)}}
-  document.title=(V.view==='home'?'TAAS CENTER':V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · TAAS CENTER';
+  document.title=V.view==='home'?'TAAS 타스':((V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · TAAS 타스');
   if(V.openId)renderDrawerKeep();
 }
 function renderDrawerKeep(){const y=$('#drawer').scrollTop;const f=document.activeElement&&document.activeElement.id;renderDrawer();$('#drawer').scrollTop=y;if(f){const e=document.getElementById(f);if(e&&e.focus&&f!=='dtitle')e.focus()}}
@@ -1369,7 +1376,7 @@ function importFlow(file){
 function doImport(mode){
   const v=window.__imp;if(!v)return;
   snapshot();
-  const incoming=normalize({tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),tax:v.doc.taxConfirmed,history:v.doc.history,seedV:1});
+  const incoming=normalize({tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),tax:v.doc.taxConfirmed,history:v.doc.history,seedV:2});
   if(mode==='replace'){
     const keep={lastBackupAt:S.lastBackupAt,createdAt:S.createdAt};
     const nt=blankState();
