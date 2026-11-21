@@ -6,121 +6,128 @@
 <title>Standard Roast · 커맨드 센터</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon.svg">
-<link rel="apple-touch-icon" href="icon.svg">
-<meta name="theme-color" content="#c1622d">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#111111">
 <meta name="robots" content="noindex,nofollow">
 <style>
 :root{
-  --bg:#f5f5f7; --panel:#ffffffcc; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --line:#d2d2d7;
-  --accent:#c1622d; --shadow:0 8px 30px rgba(0,0,0,.08);
+  --bg:#f5f5f7; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --line:#d2d2d7; --accent:#c1622d;
+  --glass:rgba(255,255,255,.72); --shadow:0 10px 30px rgba(0,0,0,.12);
   --s0:#c7c7cc; --s1:#f5a623; --s2:#34c759;
 }
 @media (prefers-color-scheme: dark){
-  :root{ --bg:#000; --panel:#1c1c1ecc; --card:#1c1c1e; --text:#f5f5f7; --muted:#a1a1a6; --line:#3a3a3c; --shadow:0 8px 30px rgba(0,0,0,.5); --s0:#48484a; }
+  :root{ --bg:#000; --card:#1c1c1e; --text:#f5f5f7; --muted:#a1a1a6; --line:#3a3a3c; --glass:rgba(40,40,44,.72); --shadow:0 10px 30px rgba(0,0,0,.6); --s0:#48484a; }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
 button{font:inherit;color:inherit;cursor:pointer}
-header.top{max-width:1240px;margin:0 auto;padding:44px 24px 0;text-align:center}
-.eyebrow{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:700}
-h1{font-size:clamp(34px,6vw,60px);line-height:1.08;letter-spacing:-.03em;margin:10px 0 8px;font-weight:700}
+header.top{max-width:1100px;margin:0 auto;padding:36px 24px 0;text-align:center}
+.eyebrow{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:clamp(30px,5vw,52px);line-height:1.1;letter-spacing:-.03em;margin:8px 0 6px;font-weight:700}
 h1 span{background:linear-gradient(90deg,#c1622d,#e9a23b 55%,#7c9a44);-webkit-background-clip:text;background-clip:text;color:transparent}
-.lead{color:var(--muted);font-size:clamp(15px,2vw,19px);margin:0}
-.toolbar{display:flex;gap:8px;justify-content:center;margin:22px 0 0;flex-wrap:wrap}
+.lead{color:var(--muted);font-size:clamp(14px,2vw,17px);margin:0}
+.toolbar{display:flex;gap:8px;justify-content:center;margin:16px 0 0;flex-wrap:wrap}
 .pill{border:1px solid var(--line);background:var(--card);border-radius:980px;padding:7px 16px;font-size:13px;color:var(--muted)}
-.pill:hover{color:var(--text)}
+.pill:hover,.pill.on{color:var(--text);border-color:var(--text)}
 
-/* ---------- mind map ---------- */
-.mapwrap{max-width:1240px;margin:0 auto;padding:0 12px}
-#map{width:100%;height:auto;display:block;overflow:visible}
-.edge{fill:none;stroke-width:1.6;opacity:.45;stroke-dasharray:var(--len);stroke-dashoffset:var(--len);animation:draw 1.1s ease forwards}
-@keyframes draw{to{stroke-dashoffset:0}}
-.node{cursor:pointer;outline:none;opacity:0;animation:pop .6s cubic-bezier(.2,.8,.2,1) forwards;transform-box:fill-box;transform-origin:center}
-@keyframes pop{from{opacity:0;transform:scale(.7)}to{opacity:1;transform:scale(1)}}
-.node .bg{transition:transform .25s cubic-bezier(.2,.8,.2,1),filter .25s;transform-box:fill-box;transform-origin:center}
-.node:hover .bg,.node:focus-visible .bg{transform:scale(1.07);filter:drop-shadow(0 6px 14px rgba(0,0,0,.25))}
-.main .bg{stroke:none}
-.leaf .bg{fill:var(--card);stroke-width:1.4}
-.leaf text{fill:var(--text);font-size:12.5px;font-weight:500}
-.main text.t{fill:#fff;font-size:15px;font-weight:700}
-.main text.i{font-size:20px}
-.center .bg{fill:var(--text)}
-.center text{fill:var(--bg)}
-.center .big{font-size:21px;font-weight:700;letter-spacing:-.02em}
-.center .sm{font-size:12px;opacity:.7}
-.ring{fill:none;stroke-width:5;stroke-linecap:round}
+/* ---------- 3D stage ---------- */
+#stage{position:relative;z-index:0;isolation:isolate;height:min(78vh,760px);min-height:520px;overflow:hidden;cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+#stage.drag{cursor:grabbing}
+#stage::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 62%);pointer-events:none}
+#lines{position:absolute;inset:0;pointer-events:none;overflow:visible}
+#nodes{position:absolute;inset:0}
+.n3{position:absolute;left:0;top:0;will-change:transform,opacity}
+.core{position:relative;width:190px;height:190px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;
+  background:radial-gradient(circle at 32% 28%,#4a4a50,#111 62%,#000);color:#fff;box-shadow:0 30px 60px rgba(0,0,0,.35),inset 0 0 0 2px #ffffff22;cursor:default}
+.core .lg{max-width:120px;max-height:84px;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.core .wm{font-weight:800;letter-spacing:.14em;font-size:17px;line-height:1.15}
+.core .wm small{display:block;font-weight:600;font-size:15px;letter-spacing:.42em;color:#e9a23b}
+.core .pc{margin-top:8px;font-size:12px;opacity:.75}
+.core .ring{position:absolute;left:-9px;top:-9px;width:208px;height:208px;transform:rotate(-90deg)}
 
-/* ---------- cards (mobile + below map) ---------- */
-.grid{display:none;max-width:1240px;margin:20px auto 0;padding:0 16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
-.mcard{background:var(--card);border-radius:22px;padding:20px;text-align:left;border:1px solid var(--line);box-shadow:var(--shadow);transition:transform .2s}
-.mcard:hover{transform:translateY(-3px)}
-.mcard .ic{font-size:30px}.mcard b{display:block;font-size:18px;margin-top:6px}.mcard small{color:var(--muted)}
-.bar{height:6px;border-radius:6px;background:var(--line);margin-top:14px;overflow:hidden}.bar i{display:block;height:100%;border-radius:6px;transition:width .4s}
-@media (max-width:820px){ .mapwrap{display:none} .grid{display:grid} }
+.main{cursor:pointer;color:#fff;border-radius:34px;padding:12px 20px 12px 16px;display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;white-space:nowrap;
+  background:linear-gradient(145deg,var(--c),color-mix(in srgb,var(--c) 60%,#000));box-shadow:0 18px 34px color-mix(in srgb,var(--c) 45%,transparent),inset 0 1px 0 #ffffff55;transition:filter .2s,scale .2s;outline:none}
+.main:hover,.main:focus-visible{scale:1.08;filter:brightness(1.1)}
+.main .ic{font-size:24px}
+.main .pct{font-size:11px;font-weight:700;background:#ffffff30;border-radius:980px;padding:2px 8px}
+.leaf{cursor:pointer;background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1.5px solid var(--c);border-radius:20px;padding:7px 14px 7px 11px;font-size:13px;font-weight:600;white-space:nowrap;display:flex;align-items:center;gap:8px;box-shadow:var(--shadow);transition:scale .2s;outline:none}
+.leaf:hover,.leaf:focus-visible{scale:1.1}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.hint{position:absolute;left:0;right:0;bottom:12px;text-align:center;font-size:12px;color:var(--muted);pointer-events:none}
 
-/* ---------- upcoming ---------- */
-.up{max-width:1240px;margin:34px auto 0;padding:0 24px}
-.up h2{font-size:22px;letter-spacing:-.02em;margin:0 0 12px}
+/* mobile cards */
+.grid{display:none;margin:18px 16px 0;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.mcard{background:var(--card);border-radius:22px;padding:18px;text-align:left;border:1px solid var(--line);box-shadow:var(--shadow)}
+.mcard .ic{font-size:28px}.mcard b{display:block;font-size:17px;margin-top:4px}.mcard small{color:var(--muted)}
+.bar{height:6px;border-radius:6px;background:var(--line);margin-top:12px;overflow:hidden}.bar i{display:block;height:100%;border-radius:6px;transition:width .4s}
+@media (max-width:640px){ #stage,.hint{display:none} .grid{display:grid} }
+
+.up{max-width:1100px;margin:26px auto 0;padding:0 24px}
+.up h2{font-size:20px;letter-spacing:-.02em;margin:0 0 12px}
 .uplist{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .upc{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
 .upc .d{font-size:28px;font-weight:700;letter-spacing:-.03em}.upc .d.hot{color:#ff3b30}
 .upc span{color:var(--muted);font-size:13px}
-footer{max-width:1240px;margin:44px auto;padding:0 24px;color:var(--muted);font-size:12px;text-align:center;line-height:1.7}
+footer{max-width:1100px;margin:40px auto;padding:0 24px;color:var(--muted);font-size:12px;text-align:center;line-height:1.7}
 
 /* ---------- detail sheet ---------- */
-#sheet{position:fixed;inset:0;z-index:50;display:none;background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);overflow-y:auto;overscroll-behavior:contain}
+#sheet{position:fixed;inset:0;z-index:50;display:none;background:color-mix(in srgb,var(--bg) 72%,transparent);backdrop-filter:blur(30px) saturate(1.6);-webkit-backdrop-filter:blur(30px) saturate(1.6);overflow-y:auto;overscroll-behavior:contain}
 #sheet.open{display:block;animation:sheetin .5s cubic-bezier(.2,.8,.2,1)}
 #sheet.closing{animation:sheetout .28s ease forwards}
 @keyframes sheetin{from{opacity:0;transform:scale(.55)}to{opacity:1;transform:scale(1)}}
 @keyframes sheetout{to{opacity:0;transform:scale(.8)}}
-.sheetin{max-width:980px;margin:0 auto;padding:22px 20px 80px}
-.nav{display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;padding:10px 0;z-index:2}
+.sheetin{max-width:980px;margin:0 auto;padding:18px 20px 80px}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:6px 0 10px}
 .back{border:0;background:var(--card);border-radius:980px;padding:9px 18px;font-size:14px;box-shadow:var(--shadow)}
-.hero{border-radius:28px;padding:36px 30px;color:#fff;margin-top:8px;position:relative;overflow:hidden}
-.hero .ic{font-size:52px}.hero h2{font-size:clamp(30px,5vw,46px);letter-spacing:-.03em;margin:8px 0 6px}
-.hero p{margin:0;opacity:.92;font-size:16px;max-width:620px;line-height:1.55}
+.hero{border-radius:28px;padding:34px 30px;color:#fff}
+.hero .ic{font-size:50px}.hero h2{font-size:clamp(28px,5vw,44px);letter-spacing:-.03em;margin:6px 0}
+.hero p{margin:0;opacity:.93;font-size:16px;max-width:640px;line-height:1.55}
 .hero .bar{background:#ffffff40;max-width:360px}.hero .bar i{background:#fff}
-.hero small{display:block;margin-top:8px;opacity:.9}
-.sec{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:30px 0 12px}
+.hero small{display:block;margin-top:10px;opacity:.9}
+.why{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 18px;margin-top:14px;font-size:14px;line-height:1.6;color:var(--muted)}
+.why b{color:var(--text)}
+.sec{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:28px 0 12px}
 .items{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
 .item{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:10px;transition:box-shadow .3s,border-color .3s}
 .item.hl{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}
 .item h3{margin:0;font-size:18px;letter-spacing:-.02em}
-.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .badge{white-space:nowrap;flex:none;font-size:11px;font-weight:700;padding:3px 9px;border-radius:980px;background:var(--bg);color:var(--muted)}
 .item p{margin:0;font-size:14px;color:var(--muted);line-height:1.55}
 .item .k{font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:2px}
 .stbtn{border:1px solid var(--line);background:var(--bg);border-radius:12px;padding:9px 12px;font-size:13px;font-weight:600;text-align:left;display:flex;align-items:center;gap:8px;margin-top:auto}
-.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.act{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:980px;padding:6px 13px;font-size:12.5px;font-weight:600;text-decoration:none;display:inline-flex;gap:6px;align-items:center}
+.act em{font-style:normal;opacity:.7;font-weight:400}
+.act:hover{background:var(--accent);color:#fff}
 .tools{display:flex;flex-wrap:wrap;gap:8px}.tools span{background:var(--card);border:1px solid var(--line);border-radius:980px;padding:6px 14px;font-size:13px}
-.mnav{display:flex;justify-content:space-between;gap:12px;margin-top:36px}
+.mnav{display:flex;justify-content:space-between;gap:12px;margin-top:34px}
 .mnav button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:18px;padding:16px;text-align:left}
 .mnav button small{color:var(--muted);display:block}
 .note{background:color-mix(in srgb,var(--accent) 12%,var(--card));border-radius:16px;padding:14px 16px;font-size:13px;color:var(--muted);line-height:1.6;margin-top:16px}
 table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border-radius:18px;overflow:hidden;border:1px solid var(--line)}
 td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border:0}th{color:var(--muted);font-size:12px}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
-.acts{display:flex;flex-wrap:wrap;gap:8px}
-.act{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:980px;padding:6px 13px;font-size:12.5px;font-weight:600;text-decoration:none;display:inline-flex;gap:6px;align-items:center}
-.act em{font-style:normal;opacity:.7;font-weight:400}
-.act:hover{background:var(--accent);color:#fff}
 </style>
 </head>
 <body>
 
 <header class="top">
-  <div class="eyebrow">Standard Roast · Command Center</div>
-  <h1>브랜드의 모든 일을<br><span>한 화면</span>에서.</h1>
-  <p class="lead">가지를 누르면 상세로 들어갑니다. 상태를 눌러 진행도를 기록하세요.</p>
+  <div class="eyebrow">Command Center</div>
+  <h1>브랜드의 모든 일을 <span>한 화면</span>에서.</h1>
+  <p class="lead">끌어서 돌려보고, 가지를 누르면 상세로 들어갑니다.</p>
   <div class="toolbar">
+    <button class="pill on" id="btnRot">자동 회전</button>
+    <button class="pill" id="btnHome">시점 초기화</button>
     <button class="pill" id="btnReset">진행도 초기화</button>
-    <button class="pill" id="btnExport">백업 복사</button>
+    <button class="pill" id="btnExport">현황 복사</button>
   </div>
 </header>
 
-<div class="mapwrap"><svg id="map" viewBox="0 0 1240 900" role="group" aria-label="Standard Roast 마인드맵"></svg></div>
+<div id="stage" aria-label="Standard Roast 3D 마인드맵">
+  <svg id="lines" width="100%" height="100%"></svg><div id="nodes"></div>
+  <div class="hint">드래그해서 회전 · 클릭해서 열기</div>
+</div>
 <div class="grid" id="grid"></div>
 
 <section class="up">
@@ -137,175 +144,173 @@ td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:l
 
 <script>
 /* =====================================================================
-   데이터 — 여기만 고치면 마인드맵/상세페이지가 자동으로 바뀝니다.
-   lv: 목표 자동화 수준  A=완전자동 / S=반자동 / M=수동
+   데이터 — 여기만 고치면 3D 맵과 상세페이지가 자동으로 바뀝니다.
+   lv: A=완전자동 / S=반자동 / M=수동   ·   g: 상세 페이지 안의 묶음 이름
    ===================================================================== */
 const MODS = [
- { id:'auto', icon:'⚙️', name:'자동화 허브', color:'#5e5ce6',
-   sub:'반복 업무를 연결하고, 매일 아침 한 장짜리 브리핑으로 받아봅니다.',
-   tools:['Zapier','Make','Google Calendar','Google Drive','Claude'],
+ { id:'auto', icon:'⚙️', name:'자동화 · 인스타', color:'#5e5ce6',
+   sub:'인스타그램 안의 모든 일(카드뉴스·릴스·DM·발행)과 매일 반복되는 운영 업무를 한 줄기 자동화로 묶었습니다.',
+   why:'<b>왜 합쳤나?</b> 카드뉴스·릴스·인스타는 전부 인스타그램 안에서 일어나는 일이라 하나로 합쳤고, 자동화의 가장 큰 덩어리이므로 자동화 허브 아래에 넣었습니다.',
+   tools:['Claude (/news, /w-news)','Canva','CapCut','Meta Business Suite','ManyChat','Zapier','Google Calendar'],
    items:[
-    {s:'일일 브리핑', n:'일일 브리핑', lv:'A', d:'매출·주문·일정·할 일을 매일 아침 한 장으로 요약해 받기.', how:'캘린더 + 스토어 주문 + 시트 → Claude 요약 → 카톡/메일', next:'받고 싶은 항목 5개 정하기', cmd:"/morning"},
-    {s:'주문 알림', n:'주문·문의 알림', lv:'A', d:'스토어 주문, DM, 문의 폼이 들어오면 한 곳으로 모읍니다.', how:'Zapier: 새 주문 → 시트 기록 + 알림', next:'주문이 들어오는 채널 목록 정리', link:["Zapier", "https://zapier.com/app/zaps"]},
-    {s:'스케줄러', n:'반복업무 스케줄러', lv:'S', d:'주간/월간 루틴을 캘린더에 심고 자동 리마인드.', how:'Google Calendar 반복 일정 + 체크리스트 링크', next:'주간 루틴 10개 적기'},
-    {s:'자료 정리', n:'자료·영수증 자동 정리', lv:'S', d:'사진/PDF를 올리면 날짜·종류별 폴더로 분류.', how:'Drive 폴더 감시 → 이름 규칙 → 시트에 기록', next:'폴더 구조 확정'},
-    {s:'AI 비서', n:'Claude 비서 루틴', lv:'S', d:'자주 하는 요청을 스킬/프롬프트로 저장해 버튼처럼 사용.', how:'스킬(news, taas 등) + 반복 프롬프트 모음', next:'자주 쓰는 요청 Top5 저장'},
-   ]},
- { id:'card', icon:'🗞️', name:'카드뉴스', color:'#ff9f0a',
-   sub:'주제 하나로 카드뉴스 · 캡션 · 블로그 글까지 한 번에. 픽셀 캐릭터 도트판 스타일.',
-   tools:['Claude (/news)','Canva','Instagram','네이버 블로그'],
-   items:[
-    {s:'주제 수집', n:'주제 수집·큐레이션', lv:'S', d:'커피·제주·트렌드 뉴스에서 이번 주 소재를 모읍니다.', how:'뉴스/검색 → 후보 10개 → 1개 선택', next:'소재 보관함(시트) 만들기'},
-    {s:'카드 제작', n:'카드뉴스 제작', lv:'A', d:'/news 주제 입력 → 카드 6~8장 문구 + 디자인 생성.', how:'Claude 스킬 → Canva 템플릿에 자동 채움', next:'브랜드 템플릿 1종 고정', cmd:"/news 주제", link:["Canva", "https://www.canva.com"]},
-    {s:'캡션·블로그', n:'캡션 + 블로그 글', lv:'A', d:'같은 주제로 인스타 캡션, 해시태그, 블로그 본문을 함께 생성.', how:'카드 결과 → 캡션/블로그 변환 프롬프트', next:'해시태그 세트 3종'},
-    {s:'주간 신문', n:'THE STANDARD 주간지', lv:'S', d:'매주 월요일 신문 지면 형식 카드뉴스.', how:'/w-news → 월요일 오전 예약 발행', next:'월요일 발행 루틴 캘린더 등록', cmd:"/w-news"},
-    {s:'성과 복기', n:'성과 복기', lv:'S', d:'저장·공유·도달을 보고 다음 주제에 반영.', how:'인사이트 → 시트 → 월간 요약', next:'기록할 지표 3개 정하기'},
-   ]},
- { id:'reels', icon:'🎬', name:'릴스·숏폼', color:'#ff375f',
-   sub:'아이디어 뱅크 → 촬영 → 자막 편집 → 예약 업로드까지 파이프라인으로.',
-   tools:['CapCut','Canva','Instagram','YouTube Shorts','TikTok'],
-   items:[
-    {s:'콘셉트 뱅크', n:'콘셉트·훅 뱅크', lv:'S', d:'로스팅 ASMR, 바 뒷모습, 생두→원두 변신 등 반복 가능한 포맷 모음.', how:'시트에 포맷 20개 → 주 3개 선택', next:'포맷 10개 먼저 적기'},
-    {s:'촬영 계획', n:'촬영 캘린더', lv:'S', d:'로스팅 날 하루에 몰아 찍는 배치 촬영.', how:'로스팅 일정 + 촬영 체크리스트', next:'월 1회 배치 촬영일 정하기'},
-    {s:'자막·편집', n:'자막·편집 템플릿', lv:'S', d:'자동 자막 + 브랜드 폰트/컬러 템플릿.', how:'CapCut 자동캡션 → 템플릿 적용', next:'오프닝/엔딩 템플릿 1개'},
-    {s:'예약 업로드', n:'예약 업로드', lv:'A', d:'요일·시간 고정 발행, 캡션·해시태그 자동 삽입.', how:'Meta 예약발행 / 외부 스케줄러', next:'최적 시간대 2주 테스트', link:["Meta Business Suite", "https://business.facebook.com"]},
-    {s:'트렌드 사운드', n:'트렌드 레이더', lv:'S', d:'뜨는 음원·포맷을 주 1회 점검해 브랜드 톤으로 변형.', how:'주 1회 탐색 + 저장 폴더', next:'탐색 요일 고정'},
-   ]},
- { id:'sns', icon:'📸', name:'인스타·SNS', color:'#bf5af2',
-   sub:'발행·응대·분석을 묶어 계정이 알아서 굴러가게 만듭니다.',
-   tools:['Instagram','Meta Business','ManyChat','네이버 플레이스','카카오 채널'],
-   items:[
-    {s:'DM 자동응답', n:'DM 자동응답', lv:'A', d:'영업시간, 위치, 원두 문의에 키워드로 자동 답변.', how:'ManyChat 등 키워드 트리거 → 안내 → 사람 연결', next:'FAQ 10개 작성'},
-    {s:'예약 발행', n:'게시물 예약 발행', lv:'A', d:'피드·릴스·스토리 한 주치를 미리 예약.', how:'Meta Business Suite 예약', next:'주간 발행표 확정', link:["Meta Business Suite", "https://business.facebook.com"]},
-    {s:'후기 수집', n:'후기·UGC 수집', lv:'S', d:'고객 태그/리뷰를 모아 재게시(허락 후).', how:'태그 알림 → 보관함 → 스토리 공유', next:'후기 요청 문구 만들기'},
-    {s:'인사이트', n:'주간 인사이트 리포트', lv:'A', d:'팔로워·도달·저장 지표를 매주 자동 요약.', how:'인사이트 → 시트 → Claude 요약', next:'기준 지표 정하기'},
-    {s:'지역 노출', n:'네이버/지도 노출', lv:'S', d:'플레이스 사진·소식·리뷰 답글 관리.', how:'주 1회 루틴 + 답글 템플릿', next:'답글 템플릿 5종', link:["네이버 스마트플레이스", "https://new.smartplace.naver.com"]},
+    {g:'인스타그램', s:'카드뉴스', n:'카드뉴스 (주제→카드→캡션→블로그)', lv:'A', d:'주제 하나로 카드 6~8장, 캡션, 해시태그, 블로그 본문까지 한 번에 생성. 픽셀 캐릭터 도트판 스타일.', how:'/news 주제 입력 → Canva 템플릿에 채움 → 캡션·블로그 변환', next:'브랜드 템플릿 1종 고정, 소재 보관함 만들기', cmd:'/news 주제', link:['Canva','https://www.canva.com']},
+    {g:'인스타그램', s:'릴스', n:'릴스·숏폼 파이프라인', lv:'S', d:'콘셉트 뱅크 → 배치 촬영 → 자막 편집 템플릿 → 예약 업로드. 트렌드 포맷은 주 1회 점검.', how:'시트에 포맷 20개 → 로스팅 날 몰아 촬영 → CapCut 템플릿', next:'포맷 10개 먼저 적기, 월 1회 촬영일 정하기'},
+    {g:'인스타그램', s:'예약·DM', n:'예약 발행 + DM 자동응답', lv:'A', d:'피드·릴스·스토리 한 주치를 예약하고, 영업시간·위치·원두 문의는 키워드로 자동 답변.', how:'Meta Business Suite 예약 + ManyChat 키워드 트리거', next:'주간 발행표 확정, FAQ 10개 작성', link:['Meta Business Suite','https://business.facebook.com']},
+    {g:'인스타그램', s:'주간 신문', n:'THE STANDARD 주간지', lv:'S', d:'매주 월요일 신문 지면 형식 카드뉴스.', how:'/w-news → 월요일 오전 예약 발행', next:'월요일 발행 루틴을 캘린더에 등록', cmd:'/w-news'},
+    {g:'인스타그램', s:'인사이트', n:'인사이트 리포트', lv:'A', d:'팔로워·도달·저장 지표를 매주 요약해 다음 주제에 반영.', how:'인사이트 → 시트 → Claude 요약', next:'기준 지표 3개 정하기'},
+    {g:'운영 자동화', s:'일일 브리핑', n:'일일 브리핑', lv:'A', d:'매출·주문·일정·할 일을 매일 아침 한 장으로 요약.', how:'캘린더 + 주문 + 시트 → Claude 요약 → 알림', next:'받고 싶은 항목 5개 정하기', cmd:'/morning'},
+    {g:'운영 자동화', s:'주문 알림', n:'주문·문의 알림', lv:'A', d:'스토어 주문, DM, 문의 폼이 들어오면 한 곳으로 모읍니다.', how:'Zapier: 새 주문 → 시트 기록 + 알림', next:'주문이 들어오는 채널 목록 정리', link:['Zapier','https://zapier.com/app/zaps']},
+    {g:'운영 자동화', s:'AI 비서', n:'Claude 비서 루틴', lv:'S', d:'자주 하는 요청을 스킬·프롬프트로 저장해 버튼처럼 사용.', how:'스킬(news, taas 등) + 반복 프롬프트 모음', next:'자주 쓰는 요청 Top5 저장'},
    ]},
  { id:'tax', icon:'🧾', name:'세무·회계', color:'#30b0c7',
    sub:'영수증 한 번 올리면 장부로. 신고 일정은 알림으로. 세무사에겐 정리된 파일만.',
+   why:'<b>왜 있나?</b> 사업에서 가장 놓치기 쉽고 실수 비용이 큰 영역이라, 정리·알림을 자동화하는 효과가 큽니다. 제출은 사람이 승인합니다.',
    tools:['홈택스','카드/계좌 내역 CSV','Google Sheets','세무사 전달 패키지'],
    items:[
-    {s:'매입 정리', n:'매입·영수증 정리', lv:'S', d:'카드·계좌 내역과 영수증을 월별로 장부(CSV/시트)에 정리.', how:'카드사 CSV → 계정과목 분류 → 시트', next:'계정과목 분류표 만들기', cmd:"카드·영수증 내역을 세무사 전달용 CSV로 정리해줘"},
-    {s:'매출 집계', n:'매출 집계', lv:'A', d:'카드매출·계좌입금·스토어 정산을 한 시트로 합산.', how:'채널별 정산표 → 자동 합계', next:'매출 채널 목록 정리'},
-    {s:'세금계산서', n:'전자세금계산서·현금영수증', lv:'S', d:'B2B 납품 시 발행, 기한(익월 10일) 알림.', how:'홈택스 발행 + 캘린더 알림', next:'거래처 목록 만들기', link:["홈택스", "https://www.hometax.go.kr"]},
-    {s:'신고 일정', n:'신고·납부 달력', lv:'A', d:'부가세·종소세·원천세 등 기한 D-Day 알림.', how:'캘린더 반복 일정(아래 일정표 참고)', next:'캘린더에 일정 등록', link:["홈택스", "https://www.hometax.go.kr"]},
-    {s:'세무사 패키지', n:'세무사 전달 패키지', lv:'A', d:'월말마다 매출·매입·증빙을 한 폴더/파일로 묶어 전달.', how:'월말 자동 압축/공유 링크', next:'전달 양식 세무사와 합의'},
-    {s:'원가·손익', n:'원가·손익 대시보드', lv:'S', d:'원두 원가, 인건비, 임대료로 월 손익 확인.', how:'시트 수식 + 월 요약', next:'고정비 항목 입력'},
-   ],
-   extra:'tax' },
+    {g:'장부', s:'매입 정리', n:'매입·영수증 정리', lv:'S', d:'카드·계좌 내역과 영수증을 월별로 장부(CSV/시트)에 정리.', how:'카드사 CSV → 계정과목 분류 → 시트', next:'계정과목 분류표 만들기', cmd:'카드·영수증 내역을 세무사 전달용 CSV로 정리해줘'},
+    {g:'장부', s:'매출 집계', n:'매출 집계 · 손익', lv:'A', d:'카드매출·계좌입금·스토어 정산을 한 시트로 합산하고 월 손익까지 확인.', how:'채널별 정산표 → 자동 합계 + 원가 수식', next:'매출 채널·고정비 항목 정리'},
+    {g:'신고', s:'신고 달력', n:'신고·납부 달력', lv:'A', d:'부가세·종소세·원천세 기한 D-Day 알림.', how:'캘린더 반복 일정(아래 일정표 참고)', next:'캘린더에 일정 등록', link:['홈택스','https://www.hometax.go.kr']},
+    {g:'신고', s:'세금계산서', n:'전자세금계산서·현금영수증', lv:'S', d:'B2B 납품 시 발행, 기한(익월 10일) 알림.', how:'홈택스 발행 + 캘린더 알림', next:'거래처 목록 만들기', link:['홈택스','https://www.hometax.go.kr']},
+    {g:'신고', s:'세무사 패키지', n:'세무사 전달 패키지', lv:'A', d:'월말마다 매출·매입·증빙을 한 폴더로 묶어 전달.', how:'월말 자동 압축/공유 링크', next:'전달 양식 세무사와 합의'},
+   ], extra:'tax' },
  { id:'web', icon:'🌐', name:'홈페이지·스토어', color:'#0a84ff',
    sub:'소개 페이지, 원두 판매, 블로그를 자동으로 갱신되는 하나의 시스템으로.',
+   why:'<b>왜 있나?</b> 인스타에서 온 관심이 구매·예약으로 이어지는 도착점입니다.',
    tools:['GitHub Pages','네이버 스마트스토어','Google Forms','Search Console'],
    items:[
-    {s:'브랜드 사이트', n:'브랜드 사이트', lv:'S', d:'현재 저장소의 중문로스터리 페이지를 브랜드 허브로 확장.', how:'index.html 개선 + 배포 자동화', next:'메뉴/원두 정보 최신화', link:["현재 사이트", "../index.html"]},
-    {s:'온라인 스토어', n:'원두 스토어', lv:'A', d:'원두·드립백 판매, 재고와 주문 자동 연동.', how:'스마트스토어/자체몰 → 주문 시트', next:'판매 상품 5개 확정', link:["스마트스토어 센터", "https://sell.smartstore.naver.com"]},
-    {s:'블로그·SEO', n:'블로그·SEO 자동 포스팅', lv:'A', d:'카드뉴스 글을 블로그/사이트에 자동 게시, 검색 노출 관리.', how:'카드뉴스 본문 → 게시 → 사이트맵 갱신', next:'키워드 20개 선정'},
-    {s:'문의·예약', n:'문의·예약·클래스 폼', lv:'A', d:'체험/납품/문의 폼이 시트와 알림으로 연결.', how:'Form → 시트 → 알림 + 자동 답장', next:'폼 항목 정하기'},
-    {s:'지도·후기', n:'지도·후기 연동', lv:'S', d:'네이버·카카오·구글 지도 정보 일치 및 후기 모으기.', how:'정보 통일표 + 월 점검', next:'영업시간/주소 통일'},
+    {g:'사이트', s:'브랜드 사이트', n:'브랜드 사이트', lv:'S', d:'현재 저장소의 중문로스터리 페이지를 브랜드 허브로 확장.', how:'index.html 개선 + 배포 자동화', next:'메뉴/원두 정보 최신화', link:['현재 사이트','../index.html']},
+    {g:'판매', s:'원두 스토어', n:'원두 스토어', lv:'A', d:'원두·드립백 판매, 재고와 주문 자동 연동.', how:'스마트스토어/자체몰 → 주문 시트', next:'판매 상품 5개 확정', link:['스마트스토어 센터','https://sell.smartstore.naver.com']},
+    {g:'사이트', s:'블로그·SEO', n:'블로그·SEO 자동 포스팅', lv:'A', d:'카드뉴스 글을 블로그/사이트에 자동 게시, 검색 노출 관리.', how:'카드뉴스 본문 → 게시 → 사이트맵 갱신', next:'키워드 20개 선정'},
+    {g:'응대', s:'문의·예약', n:'문의·예약·클래스 폼', lv:'A', d:'체험/납품/문의 폼이 시트와 알림으로 연결.', how:'Form → 시트 → 알림 + 자동 답장', next:'폼 항목 정하기'},
+    {g:'응대', s:'지도·후기', n:'지도·후기 연동', lv:'S', d:'네이버·카카오·구글 지도 정보 일치 및 후기 모으기.', how:'정보 통일표 + 월 점검', next:'영업시간/주소 통일', link:['네이버 스마트플레이스','https://new.smartplace.naver.com']},
    ]},
  { id:'roast', icon:'☕', name:'로스팅·재고', color:'#a2845e',
-   sub:'TAAS 로스팅 프로그램과 생두 재고, 로스팅 기록, 발주를 연결합니다.',
+   sub:'TAAS 로스팅 프로그램과 생두 재고, 로스팅 기록, 원가를 연결합니다.',
+   why:'<b>왜 있나?</b> 제품의 핵심이자 원가가 생기는 곳이라, 기록이 쌓일수록 가격·발주·상품 문구가 정확해집니다.',
    tools:['TAAS','Google Sheets','생두 거래처'],
    items:[
-    {s:'TAAS', n:'TAAS 로스팅 프로그램', lv:'S', d:'로스팅 기록·프로파일·배치를 관리하는 내부 프로그램.', how:'/taas 스킬로 수정 요청 누적 → 일괄 반영', next:'대기 중인 수정 요청 정리', cmd:"/taas"},
-    {s:'생두 재고', n:'생두 재고·발주', lv:'A', d:'재고가 기준 이하면 발주 알림.', how:'재고 시트 + 임계값 알림', next:'생두 목록과 안전재고 입력'},
-    {s:'로스팅 로그', n:'로스팅 로그', lv:'S', d:'배치·온도·시간·손실률을 기록하고 맛 메모와 연결.', how:'TAAS 기록 → 시트 내보내기', next:'필수 기록 항목 확정'},
-    {s:'원가 계산', n:'원두 원가 계산', lv:'A', d:'생두 단가·손실률·포장재로 g당 원가와 마진 계산.', how:'시트 수식', next:'포장재 단가 입력'},
-    {s:'품질·맛', n:'컵노트·품질 기록', lv:'M', d:'컵핑 점수와 컵노트를 상품 설명에 재사용.', how:'컵핑 시트 → 상품 문구', next:'컵핑 양식 만들기'},
+    {g:'생산', s:'TAAS', n:'TAAS 로스팅 프로그램', lv:'S', d:'로스팅 기록·프로파일·배치를 관리하는 내부 프로그램.', how:'/taas 스킬로 수정 요청 누적 → 일괄 반영', next:'대기 중인 수정 요청 정리', cmd:'/taas'},
+    {g:'재고', s:'생두 재고', n:'생두 재고·발주', lv:'A', d:'재고가 기준 이하면 발주 알림.', how:'재고 시트 + 임계값 알림', next:'생두 목록과 안전재고 입력'},
+    {g:'생산', s:'로스팅 로그', n:'로스팅 로그·컵노트', lv:'S', d:'배치·온도·시간·손실률과 컵노트를 기록하고 상품 문구에 재사용.', how:'TAAS 기록 → 시트 내보내기', next:'필수 기록 항목 확정'},
+    {g:'재고', s:'원가 계산', n:'원두 원가 계산', lv:'A', d:'생두 단가·손실률·포장재로 g당 원가와 마진 계산.', how:'시트 수식', next:'포장재 단가 입력'},
    ]},
  { id:'money', icon:'💰', name:'수익화·성장', color:'#34c759',
-   sub:'매장 매출 밖의 수익 라인을 하나씩 열어 갑니다.',
-   tools:['스마트스토어','정기결제','K-Startup','기업마당'],
+   sub:'매장 매출 밖의 수익 라인을 하나씩 열고, 시장 흐름을 읽어 다음 한 수를 정합니다.',
+   why:'<b>왜 있나?</b> 처음 말씀하신 목표 "브랜드 수익화 자동화"와 "방향성·트렌드"를 담은 가지입니다. 자동화로 아낀 시간이 실제 수익(구독·납품·클래스·굿즈)으로 이어지는지 확인하는 자리이고, 별도 가지였던 트렌드·미래도 여기로 합쳤습니다. 필요 없으면 빼도 됩니다.',
+   tools:['스마트스토어','정기결제','K-Startup','기업마당','네이버 데이터랩'],
    items:[
-    {s:'원두 구독', n:'원두 정기구독', lv:'A', d:'월 1~2회 자동 결제·배송되는 정기구독 상품.', how:'정기결제 + 주문 시트 → 송장 일괄', next:'구독 상품 구성안 작성'},
-    {s:'B2B 납품', n:'B2B·도매 납품', lv:'S', d:'카페·사무실·숙소 대상 원두 납품 제안서와 견적 자동화.', how:'제안서 템플릿 + 견적 시트', next:'제안서 1페이지 만들기'},
-    {s:'클래스', n:'체험·클래스', lv:'S', d:'로스팅 체험, 핸드드립 클래스 예약 판매.', how:'예약 폼 + 결제 + 안내 자동 발송', next:'1회차 커리큘럼'},
-    {s:'굿즈·드립백', n:'굿즈·드립백', lv:'S', d:'픽셀 캐릭터 IP로 스티커·드립백·굿즈 확장.', how:'캐릭터 시안 → 소량 제작 테스트', next:'캐릭터 굿즈 3종 시안'},
-    {s:'지원사업', n:'정부지원사업', lv:'S', d:'소상공인·창업 지원사업 공고를 정기 탐색.', how:'K-Startup/기업마당 주 1회 점검', next:'조건 맞는 공고 5건 저장', cmd:"커피 로스팅·소상공인 지원사업 공고 찾아줘", link:["K-Startup", "https://www.k-startup.go.kr"]},
-   ]},
- { id:'future', icon:'🔭', name:'트렌드·미래', color:'#ff6482',
-   sub:'브랜드 스토리, AI 도입, 시장 변화를 읽고 다음 한 수를 준비합니다.',
-   tools:['Claude','시장 조사','네이버 데이터랩'],
-   items:[
-    {s:'시장 레이더', n:'시장·트렌드 레이더', lv:'S', d:'커피 트렌드·경쟁사 가격·상권 변화를 월 1회 점검.', how:'검색/쇼핑 데이터 요약 리포트', next:'경쟁사 5곳 리스트', cmd:"경쟁사 원두 가격 비교와 상권 조사해줘"},
-    {s:'브랜드 IP', n:'브랜드 스토리·캐릭터', lv:'M', d:'스탠다드 로스트만의 세계관과 픽셀 캐릭터를 일관되게.', how:'브랜드 가이드 1장', next:'브랜드 한 줄 정의'},
-    {s:'AI 에이전트', n:'AI 에이전트 확대', lv:'S', d:'반복 업무를 에이전트가 처리하고 사람은 승인만.', how:'스킬 → 예약 실행 → 승인 알림', next:'승인형 자동화 1개 시작'},
-    {s:'데이터 축적', n:'데이터 자산화', lv:'S', d:'고객·매출·콘텐츠 성과를 쌓아 의사결정 기반으로.', how:'시트 → 월간 대시보드', next:'핵심 지표 5개 정하기'},
+    {g:'수익 라인', s:'원두 구독', n:'원두 정기구독', lv:'A', d:'월 1~2회 자동 결제·배송되는 정기구독 상품.', how:'정기결제 + 주문 시트 → 송장 일괄', next:'구독 상품 구성안 작성'},
+    {g:'수익 라인', s:'B2B 납품', n:'B2B·도매 납품', lv:'S', d:'카페·사무실·숙소 대상 원두 납품 제안서와 견적 자동화.', how:'제안서 템플릿 + 견적 시트', next:'제안서 1페이지 만들기'},
+    {g:'수익 라인', s:'클래스·굿즈', n:'클래스·굿즈·드립백', lv:'S', d:'로스팅 체험 클래스, 픽셀 캐릭터 굿즈, 드립백 확장.', how:'예약 폼 + 결제 / 캐릭터 시안 → 소량 제작', next:'1회차 커리큘럼, 굿즈 3종 시안'},
+    {g:'성장', s:'지원사업', n:'정부지원사업', lv:'S', d:'소상공인·창업 지원사업 공고를 정기 탐색.', how:'K-Startup/기업마당 주 1회 점검', next:'조건 맞는 공고 5건 저장', cmd:'커피 로스팅·소상공인 지원사업 공고 찾아줘', link:['K-Startup','https://www.k-startup.go.kr']},
+    {g:'성장', s:'트렌드', n:'시장·트렌드 레이더', lv:'S', d:'커피 트렌드·경쟁사 가격·상권 변화를 월 1회 점검.', how:'검색/쇼핑 데이터 요약 리포트', next:'경쟁사 5곳 리스트', cmd:'경쟁사 원두 가격 비교와 상권 조사해줘'},
    ]},
 ];
 
 const LV = {A:'🤖 완전 자동', S:'⚡ 반자동', M:'✋ 수동 유지'};
 const ST = [{n:'💡 구상',c:'var(--s0)'},{n:'🔧 구축중',c:'var(--s1)'},{n:'✅ 운영중',c:'var(--s2)'}];
 
-/* ---------- 상태 저장 ---------- */
-const KEY='sr-hub-v1';
-let state={};
+/* ---------- 상태 ---------- */
+const KEY='sr-hub-v2'; let state={};
 try{ state=JSON.parse(localStorage.getItem(KEY)||'{}') }catch(e){}
 const save=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(state)) }catch(e){} };
 const getSt=(m,i)=>state[m.id+':'+i]||0;
 const modPct=m=>Math.round(m.items.reduce((a,_,i)=>a+getSt(m,i),0)/(m.items.length*2)*100);
 const allPct=()=>{const t=MODS.reduce((a,m)=>a+m.items.length,0);const s=MODS.reduce((a,m)=>a+m.items.reduce((b,_,i)=>b+getSt(m,i),0),0);return Math.round(s/(t*2)*100)};
 
-/* ---------- 마인드맵 ---------- */
-const NS='http://www.w3.org/2000/svg';
-const el=(t,a={},p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e};
-const W=1240,H=900,CX=W/2,CY=H/2;
+/* =====================================================================
+   3D 마인드맵 (CSS 3D)
+   ===================================================================== */
+const stage=document.getElementById('stage'), nodesEl=document.getElementById('nodes'), linesEl=document.getElementById('lines');
+let rx=-14, ry=20, auto=true, drag=null, moved=false, nodes=[], links=[], rings=[];
+const HOME={rx:-14,ry:20}, R=300, Y=[-90,70,-30,100,-70], F=1500, NS='http://www.w3.org/2000/svg';
 
-function drawMap(){
-  const svg=document.getElementById('map'); svg.innerHTML='';
-  const edges=el('g',{},svg), nodes=el('g',{},svg);
-  const n=MODS.length; let delay=0.05;
+function build(){
+  nodesEl.innerHTML=''; linesEl.innerHTML=''; nodes=[]; links=[]; rings=[];
+  [310,470].forEach(r=>{const el=document.createElementNS(NS,'polyline');el.setAttribute('fill','none');el.setAttribute('stroke','var(--line)');el.setAttribute('stroke-dasharray','5 6');el.setAttribute('stroke-width','1.5');linesEl.appendChild(el);rings.push({el,r})});
+  const n=MODS.length;
+  const core=document.createElement('div'); core.className='n3';
+  const pct=allPct(), RR=99, C=2*Math.PI*RR;
+  core.innerHTML=`<div class="core">
+    <svg class="ring" viewBox="0 0 208 208"><circle cx="104" cy="104" r="${RR}" fill="none" stroke="#ffffff22" stroke-width="6"/><circle cx="104" cy="104" r="${RR}" fill="none" stroke="#34c759" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C*pct/100} ${C}"/></svg>
+    <img class="lg" id="logo" src="logo.png" alt="Standard Roast" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',innerHTML:'STANDARD<small>ROAST</small>'}))">
+    <div class="pc">가동률 ${pct}%</div></div>`;
+  nodesEl.appendChild(core); nodes.push({el:core,p:[0,0,0]});
   MODS.forEach((m,k)=>{
-    const a=-Math.PI/2+k*2*Math.PI/n;
-    const mx=CX+Math.cos(a)*300, my=CY+Math.sin(a)*235;
-    // center -> main
-    edge(edges,CX,CY,mx,my,m.color,2.6);
-    const g=el('g',{class:'node main',tabindex:0,role:'button','aria-label':m.name,style:`animation-delay:${delay+=0.06}s`},nodes);
-    const w=Math.max(130,64+m.name.length*15),h=56;
-    el('rect',{class:'bg',x:mx-w/2,y:my-h/2,width:w,height:h,rx:28,fill:m.color},g);
-    el('text',{class:'i',x:mx-w/2+26,y:my+7,'text-anchor':'middle'},g).textContent=m.icon;
-    el('text',{class:'t',x:mx+12,y:my+5,'text-anchor':'middle'},g).textContent=m.name;
-    // progress ring dot
-    const p=modPct(m);
-    el('circle',{cx:mx+w/2-6,cy:my-h/2+6,r:8,fill:'var(--card)',stroke:m.color,'stroke-width':2},g);
-    el('text',{x:mx+w/2-6,y:my-h/2+9.5,'text-anchor':'middle',style:'font-size:9px;font-weight:700;fill:var(--text)'},g).textContent=p===100?'✓':Math.floor(p/10);
-    g.addEventListener('click',e=>openMod(k,null,e));
-    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMod(k,null,e)}});
-    // leaves
-    const leaves=m.items.slice(0,3), offs=[-0.23,0,0.23], rf=[0.9,1,0.9];
-    leaves.forEach((it,i)=>{
-      const la=a+offs[i];
-      const lx=CX+Math.cos(la)*540*rf[i], ly=CY+Math.sin(la)*395*rf[i];
-      edge(edges,mx,my,lx,ly,m.color,1.5);
+    const a=k*2*Math.PI/n-Math.PI/2;
+    const p=[Math.cos(a)*R, Y[k%Y.length], Math.sin(a)*R];
+    link([0,0,0],p,m.color,2.6);
+    const e=document.createElement('div'); e.className='n3';
+    e.innerHTML=`<div class="main" style="--c:${m.color}" tabindex="0" role="button" aria-label="${m.name}"><span class="ic">${m.icon}</span>${m.name}<span class="pct">${modPct(m)}%</span></div>`;
+    nodesEl.appendChild(e); nodes.push({el:e,p,dep:true});
+    wire(e.firstChild,k,null);
+    const out=[Math.cos(a),0,Math.sin(a)], tan=[-Math.sin(a),0,Math.cos(a)];
+    const cnt=Math.min(3,m.items.length), off=[-1,0,1];
+    for(let i=0;i<cnt;i++){
+      const o=off[i], r=150+(o===0?60:0);
+      const lp=[p[0]+out[0]*r+tan[0]*o*115, p[1]+o*70+(o===0?-20:0), p[2]+out[2]*r+tan[2]*o*115];
+      link(p,lp,m.color,1.6);
+      const l=document.createElement('div'); l.className='n3';
       const st=getSt(m,i);
-      const lw=Math.max(84,it.s.length*13+38), lh=30;
-      const lg=el('g',{class:'node leaf',tabindex:0,role:'button','aria-label':it.n,style:`animation-delay:${delay+=0.03}s`},nodes);
-      el('rect',{class:'bg',x:lx-lw/2,y:ly-lh/2,width:lw,height:lh,rx:15,stroke:m.color},lg);
-      el('circle',{cx:lx-lw/2+14,cy:ly,r:4.5,fill:ST[st].c.replace('var(--s0)','var(--s0)')},lg);
-      el('text',{x:lx+7,y:ly+4.5,'text-anchor':'middle'},lg).textContent=it.s;
-      lg.addEventListener('click',e=>openMod(k,i,e));
-      lg.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openMod(k,i,e)}});
-    });
+      l.innerHTML=`<div class="leaf" style="--c:${m.color}" tabindex="0" role="button" aria-label="${m.items[i].n}"><span class="dot" style="background:${ST[st].c}"></span>${m.items[i].s}</div>`;
+      nodesEl.appendChild(l); nodes.push({el:l,p:lp,dep:true});
+      wire(l.firstChild,k,i);
+    }
   });
-  // center
-  const c=el('g',{class:'node center',style:'animation-delay:0s'},nodes);
-  el('circle',{class:'bg',cx:CX,cy:CY,r:92},c);
-  const pct=allPct(), R=102, C=2*Math.PI*R;
-  el('circle',{class:'ring',cx:CX,cy:CY,r:R,stroke:'var(--line)'},c);
-  el('circle',{class:'ring',cx:CX,cy:CY,r:R,stroke:'#34c759','stroke-dasharray':`${C*pct/100} ${C}`,transform:`rotate(-90 ${CX} ${CY})`},c);
-  el('text',{x:CX,y:CY-18,'text-anchor':'middle',style:'font-size:30px'},c).textContent='☕';
-  el('text',{class:'big',x:CX,y:CY+14,'text-anchor':'middle'},c).textContent='Standard Roast';
-  el('text',{class:'sm',x:CX,y:CY+36,'text-anchor':'middle'},c).textContent='가동률 '+pct+'%';
+  render();
 }
-function edge(g,x1,y1,x2,y2,color,w){
-  const mx=(x1+x2)/2, my=(y1+y2)/2;
-  const dx=x2-x1, dy=y2-y1;
-  const d=`M${x1},${y1} Q${mx-dy*0.12},${my+dx*0.12} ${x2},${y2}`;
-  const p=el('path',{class:'edge',d,stroke:color,'stroke-width':w},g);
-  p.style.setProperty('--len',Math.hypot(dx,dy)*1.2+10);
+function link(a,b,color,w){
+  const el=document.createElementNS(NS,'line'); el.setAttribute('stroke',color); el.setAttribute('stroke-width',w); el.setAttribute('stroke-linecap','round'); el.style.opacity='.6';
+  linesEl.insertBefore(el,linesEl.children[rings.length]); links.push({el,a,b,w});
 }
+function wire(el,k,i){
+  el.addEventListener('click',e=>{ if(moved)return; openMod(k,i,e) });
+  el.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();openMod(k,i,e)} });
+}
+function proj(p,cx,cy,k){
+  const c1=Math.cos(ry*Math.PI/180), s1=Math.sin(ry*Math.PI/180), c2=Math.cos(rx*Math.PI/180), s2=Math.sin(rx*Math.PI/180);
+  const x1=p[0]*c1+p[2]*s1, z1=-p[0]*s1+p[2]*c1;
+  const y2=p[1]*c2-z1*s2, z2=p[1]*s2+z1*c2;
+  const s=F/(F-z2);
+  return {x:cx+x1*s*k, y:cy+y2*s*k, s:s*k, z:z2};
+}
+function render(){
+  const W=stage.clientWidth, H=stage.clientHeight, k=Math.max(.5,Math.min(1.1,W/1100,H/800)), cx=W/2, cy=H*0.48;
+  nodes.forEach(n=>{
+    const q=proj(n.p,cx,cy,k);
+    n.el.style.transform=`translate(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px) translate(-50%,-50%) scale(${q.s.toFixed(3)})`;
+    n.el.style.zIndex=Math.round(q.z+1000);
+    if(n.dep) n.el.style.opacity=(0.55+0.45*Math.max(0,Math.min(1,(q.z+500)/1000))).toFixed(2);
+  });
+  links.forEach(l=>{
+    const a=proj(l.a,cx,cy,k), b=proj(l.b,cx,cy,k);
+    l.el.setAttribute('x1',a.x);l.el.setAttribute('y1',a.y);l.el.setAttribute('x2',b.x);l.el.setAttribute('y2',b.y);
+    l.el.setAttribute('stroke-width',(l.w*(a.s+b.s)/2).toFixed(2));
+  });
+  rings.forEach(r=>{
+    let pts=''; for(let i=0;i<=72;i++){const t=i/72*2*Math.PI,q=proj([Math.cos(t)*r.r,0,Math.sin(t)*r.r],cx,cy,k);pts+=q.x.toFixed(1)+','+q.y.toFixed(1)+' '}
+    r.el.setAttribute('points',pts);
+  });
+}
+let last=performance.now();
+function tick(t){
+  const dt=Math.min(50,t-last); last=t;
+  if(auto&&!drag&&!document.body.classList.contains('sheet-open')){ ry+=dt*0.006; render(); }
+  requestAnimationFrame(tick);
+}
+stage.addEventListener('pointerdown',e=>{ drag={x:e.clientX,y:e.clientY,rx,ry}; moved=false; });
+window.addEventListener('pointermove',e=>{
+  if(!drag)return;
+  const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if(!moved&&Math.hypot(dx,dy)>6){moved=true;stage.classList.add('drag')}
+  if(moved){ ry=drag.ry+dx*.4; rx=Math.max(-40,Math.min(40,drag.rx-dy*.3)); render(); }
+});
+window.addEventListener('pointerup',()=>{ drag=null; stage.classList.remove('drag'); setTimeout(()=>moved=false,0) });
+window.addEventListener('resize',render);
+document.getElementById('btnRot').onclick=e=>{auto=!auto;e.currentTarget.classList.toggle('on',auto)};
+document.getElementById('btnHome').onclick=()=>{rx=HOME.rx;ry=HOME.ry;render()};
 
-/* ---------- 카드(모바일) ---------- */
+/* ---------- 모바일 카드 ---------- */
 function drawGrid(){
   const g=document.getElementById('grid'); g.innerHTML='';
   MODS.forEach((m,k)=>{
@@ -325,16 +330,10 @@ const TAXD=[
 ];
 function upcoming(){
   const now=new Date(); now.setHours(0,0,0,0); const out=[];
-  TAXD.forEach(t=>{
-    for(let y=now.getFullYear();y<=now.getFullYear()+1;y++){
-      const months=t.m===0?[...Array(12).keys()]:[t.m-1];
-      months.forEach(mo=>{const dt=new Date(y,mo,t.d); if(dt>=now) out.push({...t,dt})});
-    }
-  });
+  TAXD.forEach(t=>{ for(let y=now.getFullYear();y<=now.getFullYear()+1;y++){
+    (t.m===0?[...Array(12).keys()]:[t.m-1]).forEach(mo=>{const dt=new Date(y,mo,t.d); if(dt>=now) out.push({...t,dt})}); }});
   out.sort((a,b)=>a.dt-b.dt);
-  const seen=new Set(), res=[];
-  out.forEach(o=>{const k=o.n+o.dt;if(!seen.has(k)){seen.add(k);res.push(o)}});
-  return res.slice(0,4).map(o=>({...o,left:Math.round((o.dt-now)/864e5)}));
+  return out.slice(0,4).map(o=>({...o,left:Math.round((o.dt-now)/864e5)}));
 }
 function drawUp(){
   document.getElementById('uplist').innerHTML=upcoming().map(o=>`<div class="upc"><div class="d ${o.left<=7?'hot':''}">D-${o.left}</div><b>${o.n}</b><br><span>${o.dt.getMonth()+1}월 ${o.dt.getDate()}일 · ${o.note}</span></div>`).join('');
@@ -344,14 +343,14 @@ function drawUp(){
 const sheet=document.getElementById('sheet'), sin=document.getElementById('sheetin');
 let cur=0, lastFocus=null;
 function openMod(k,hl,ev){
-  cur=k; const m=MODS[k];
-  if(ev&&ev.clientX!==undefined&&ev.clientX>0){sheet.style.transformOrigin=`${ev.clientX}px ${ev.clientY}px`}else{sheet.style.transformOrigin='50% 50%'}
+  cur=k;
+  sheet.style.transformOrigin=(ev&&ev.clientX>0)?`${ev.clientX}px ${ev.clientY}px`:'50% 50%';
   lastFocus=document.activeElement;
   renderSheet(hl);
   sheet.classList.remove('closing'); sheet.classList.add('open');
-  document.body.style.overflow='hidden';
+  document.body.classList.add('sheet-open'); document.body.style.overflow='hidden';
   sheet.scrollTop=0;
-  if(hl!==null){ setTimeout(()=>{const t=sin.querySelector('.item.hl'); if(t) t.scrollIntoView({behavior:'smooth',block:'center'})},450) }
+  if(hl!==null) setTimeout(()=>{const t=sin.querySelector('.item.hl'); if(t) t.scrollIntoView({behavior:'smooth',block:'center'})},450);
 }
 function renderSheet(hl){
   const m=MODS[cur], p=modPct(m);
@@ -360,15 +359,20 @@ function renderSheet(hl){
   <div class="hero" style="background:linear-gradient(135deg,${m.color},color-mix(in srgb,${m.color} 55%,#000))">
     <div class="ic">${m.icon}</div><h2>${m.name}</h2><p>${m.sub}</p>
     <small>가동률 ${p}%</small><div class="bar"><i style="width:${p}%"></i></div></div>
-  <div class="sec">구성 요소 · 상태를 눌러 진행도 기록</div><div class="items">`;
-  m.items.forEach((it,i)=>{
-    const s=getSt(m,i);
-    h+=`<div class="item ${hl===i?'hl':''}"><div class="row"><h3>${it.n}</h3><span class="badge">${LV[it.lv]}</span></div>
-      <p>${it.d}</p><p><span class="k">어떻게</span>${it.how}</p><p><span class="k">다음 할 일</span>${it.next}</p>
-      ${it.cmd||it.link?`<div class="acts">${it.cmd?`<button class="act cp" data-cmd="${it.cmd.replace(/"/g,'&quot;')}">⌘ ${it.cmd}<em>복사</em></button>`:''}${it.link?`<a class="act" href="${it.link[1]}" target="_blank" rel="noopener">↗ ${it.link[0]}</a>`:''}</div>`:''}
-      <button class="stbtn" data-i="${i}"><span class="dot" style="background:${ST[s].c}"></span>${ST[s].n}<span style="margin-left:auto;color:var(--muted);font-weight:400">눌러서 변경</span></button></div>`;
+  <div class="why">${m.why}</div>`;
+  const groups=[...new Set(m.items.map(i=>i.g))];
+  groups.forEach(gr=>{
+    h+=`<div class="sec">${gr}</div><div class="items">`;
+    m.items.forEach((it,i)=>{
+      if(it.g!==gr)return;
+      const s=getSt(m,i);
+      h+=`<div class="item ${hl===i?'hl':''}"><div class="row"><h3>${it.n}</h3><span class="badge">${LV[it.lv]}</span></div>
+        <p>${it.d}</p><p><span class="k">어떻게</span>${it.how}</p><p><span class="k">다음 할 일</span>${it.next}</p>
+        ${it.cmd||it.link?`<div class="acts">${it.cmd?`<button class="act cp" data-cmd="${it.cmd.replace(/"/g,'&quot;')}">⌘ ${it.cmd}<em>복사</em></button>`:''}${it.link?`<a class="act" href="${it.link[1]}" target="_blank" rel="noopener">↗ ${it.link[0]}</a>`:''}</div>`:''}
+        <button class="stbtn" data-i="${i}"><span class="dot" style="background:${ST[s].c}"></span>${ST[s].n}<span style="margin-left:auto;color:var(--muted);font-weight:400">눌러서 변경</span></button></div>`;
+    });
+    h+='</div>';
   });
-  h+='</div>';
   if(m.extra==='tax'){
     h+=`<div class="sec">세무 일정표 (일반 사업자 기준 예시)</div><table><tr><th>일정</th><th>시기</th></tr>${TAXD.map(t=>`<tr><td>${t.n}</td><td>${t.note}</td></tr>`).join('')}</table>
     <div class="note">⚠️ 과세유형(일반/간이/면세)·직원 유무·성실신고 여부에 따라 달라집니다. 신고·납부 전에는 홈택스 또는 세무사에게 반드시 확인하세요. 자동화는 "정리·알림·준비"까지만 하고, 제출은 사람이 승인하는 방식을 권장합니다.</div>`;
@@ -390,7 +394,7 @@ function renderSheet(hl){
 }
 function closeSheet(){
   sheet.classList.add('closing');
-  setTimeout(()=>{sheet.classList.remove('open','closing');document.body.style.overflow='';if(lastFocus&&lastFocus.focus)lastFocus.focus()},260);
+  setTimeout(()=>{sheet.classList.remove('open','closing');document.body.classList.remove('sheet-open');document.body.style.overflow='';if(lastFocus&&lastFocus.focus)lastFocus.focus()},260);
 }
 document.addEventListener('keydown',e=>{
   if(!sheet.classList.contains('open'))return;
@@ -399,13 +403,13 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'){cur=(cur-1+MODS.length)%MODS.length;renderSheet(null);sheet.scrollTop=0}
 });
 
-function refresh(){ drawMap(); drawGrid(); }
+function refresh(){ build(); drawGrid(); }
 document.getElementById('btnReset').onclick=()=>{ if(confirm('모든 진행도를 초기화할까요?')){state={};save();refresh()} };
 document.getElementById('btnExport').onclick=()=>{
   const txt=MODS.map(m=>`[${m.name}] ${modPct(m)}%\n`+m.items.map((it,i)=>`  ${ST[getSt(m,i)].n} ${it.n}`).join('\n')).join('\n\n');
   (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>alert('현황을 복사했습니다.')).catch(()=>prompt('복사해서 보관하세요',txt));
 };
-refresh(); drawUp();
+refresh(); drawUp(); requestAnimationFrame(tick);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
