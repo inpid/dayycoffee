@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>COMMAND CENTER</title>
+<title>TAAS CENTER · 타스센터</title>
 <meta name="robots" content="noindex,nofollow">
 <meta name="color-scheme" content="only light">
 <style>
@@ -1031,7 +1031,7 @@ function renderNav(){
   const st=stats(allTasks());
   const cur=V.view==='area'?'area:'+V.area:V.view;
   const btn=(k,label,hash,extra='',c='')=>`<button class="nb" data-go="${hash}" ${cur===k?'aria-current="page"':''} ${c?`style="--c:${c}"`:''}>${extra}<span>${label}</span></button>`;
-  let h=`<div class="brand"><b>COMMAND CENTER</b><span>사업 운영 대시보드</span></div>`;
+  let h=`<div class="brand"><b>TAAS CENTER</b><span>타스센터 · 사업 운영 대시보드</span></div>`;
   h+=btn('home','대시보드','home')+`<button class="nb" data-go="all" ${cur==='all'?'aria-current="page"':''}><span>전체 업무</span><span class="n">${st.total}</span></button>`;
   h+=`<h3>업무 영역</h3>`;
   AREAS.forEach(a=>{const s=stats(allTasks().filter(t=>t.areaId===a.id));
@@ -1043,7 +1043,7 @@ function renderNav(){
 function renderSaveChip(){const c=$('#saveChip');if(c)c.innerHTML=storageOk?`저장됨 · ${S.savedAt?fmtTime(S.savedAt):'—'}`:'⚠ 브라우저에 저장할 수 없음'}
 function header(title,sub){
   const d=new Date();
-  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">COMMAND CENTER</div><h1>${title}</h1><p>${sub}</p></div>
+  return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">TAAS CENTER · 타스센터</div><h1>${title}</h1><p>${sub}</p></div>
   <div class="meta"><span class="chip">${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})</span><span class="chip" id="saveChip"></span>
   <button class="btn sm" data-act="undo" ${undoable()?'':'disabled'} title="Ctrl+Z">↩ 실행 취소</button></div></header>`;
 }
@@ -1288,7 +1288,7 @@ function renderAll(){
   m.innerHTML=V.view==='home'?renderHome():V.view==='data'?renderData():V.view==='tax'?renderTax():renderList();
   renderSaveChip();
   if(keep){const q=$('#q');if(q){q.focus();q.setSelectionRange(keep.pos,keep.pos)}}
-  document.title=(V.view==='home'?'COMMAND CENTER':V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · COMMAND CENTER';
+  document.title=(V.view==='home'?'TAAS CENTER':V.view==='area'?AREA_BY_ID[V.area].name:V.view==='all'?'전체 업무':V.view==='tax'?'세무 일정':'데이터 관리')+' · TAAS CENTER';
   if(V.openId)renderDrawerKeep();
 }
 function renderDrawerKeep(){const y=$('#drawer').scrollTop;const f=document.activeElement&&document.activeElement.id;renderDrawer();$('#drawer').scrollTop=y;if(f){const e=document.getElementById(f);if(e&&e.focus&&f!=='dtitle')e.focus()}}
@@ -1303,7 +1303,7 @@ function exportData(){
      priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt}});
   const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
   const json=JSON.stringify(doc,null,2);
-  const d=new Date(),name=`command-center-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+  const d=new Date(),name=`taas-center-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const done=()=>{S.lastBackupAt=nowIso();save();renderAll();toast('JSON 백업을 저장했습니다: '+name)};
   const viaLink=()=>{const blob=new Blob([json],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);done()};
   // claude.ai 안에서 열었을 때는 downloads 기능으로, 파일로 직접 열었을 때는 일반 다운로드로 저장
