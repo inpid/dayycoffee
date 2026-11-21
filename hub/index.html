@@ -1264,10 +1264,22 @@ function exportData(){
   const merged=TASKS.map(t=>{const x=T(t.id);return {id:x.id,areaId:x.areaId,area:x.area.name,group:x.grp,name:x.name,description:x.desc,howTo:x.how,defaultNext:x.nextDefault,command:x.cmd,link:x.link,automationTarget:x.lv,
      priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt}});
   const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
-  const blob=new Blob([JSON.stringify(doc,null,2)],{type:'application/json'});
+  const json=JSON.stringify(doc,null,2);
   const d=new Date(),name=`command-center-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-  S.lastBackupAt=nowIso();save();renderAll();toast('JSON 파일을 다운로드했습니다: '+name);
+  const done=()=>{S.lastBackupAt=nowIso();save();renderAll();toast('JSON 백업을 저장했습니다: '+name)};
+  const viaLink=()=>{const blob=new Blob([json],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);done()};
+  // claude.ai 안에서 열었을 때는 downloads 기능으로, 파일로 직접 열었을 때는 일반 다운로드로 저장
+  if(window.claude&&typeof window.claude.use==='function'){
+    window.claude.use('downloads').then(dl=>{
+      if(!dl){viaLink();return}
+      dl.save({filename:name,data:json}).then(done).catch(err=>{
+        if(err&&err.code==='declined'){toast('저장을 취소했습니다. 백업 시각은 갱신하지 않았습니다.');return}
+        toast('이 화면에서는 파일 저장이 막혀 있습니다. 아래 텍스트를 복사해 .json 파일로 보관하세요.');
+        showDlg(`<h3>JSON 직접 복사</h3><p>자동 저장이 불가능해 내용을 표시합니다. 전체를 복사해 메모장 등에 붙여넣고 <b>.json</b> 확장자로 저장하세요.</p><textarea class="memo" id="rawjson" readonly style="min-height:200px;font-size:12px"></textarea><div class="ft"><button class="btn" data-act="dclose">닫기</button></div>`);
+        const t=$('#rawjson');t.value=json;t.focus();t.select();
+      });
+    }).catch(viaLink);
+  }else viaLink();
 }
 /* 가져오기 검증: 오류 문자열 배열과 정규화된 상태를 돌려준다 */
 function validateImport(text){
