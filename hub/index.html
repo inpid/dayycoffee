@@ -180,6 +180,8 @@ dialog p{margin:0 0 12px;font-size:14px;color:var(--muted)}
 dialog .ft{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--text);color:var(--bg);padding:11px 18px;border-radius:10px;font-size:14px;z-index:80;transition:all .3s;pointer-events:none;max-width:calc(100vw - 32px)}
 .toast.on{opacity:1;transform:translateX(-50%)}
+.toast.act{pointer-events:auto}
+.tact{margin-left:14px;background:none;border:0;color:#9ec3ff;font-weight:700;text-decoration:underline;padding:4px 2px;min-height:32px}
 /* ---------- responsive ---------- */
 @media (max-width:1180px){.sum{grid-template-columns:repeat(3,minmax(0,1fr))}.areas{grid-template-columns:repeat(3,minmax(0,1fr))}.two{grid-template-columns:1fr}}
 @media (max-width:900px){
@@ -349,11 +351,11 @@ const BASE = {
    "order": 2,
    "grp": "인스타그램",
    "short": "예약·DM",
-   "name": "예약 발행 + DM 자동응답",
+   "name": "게시물 업로드 (예약 발행)",
    "lv": "A",
-   "desc": "피드·릴스·스토리 한 주치를 예약하고, 영업시간·위치·원두 문의는 키워드로 자동 답변.",
-   "how": "Meta Business Suite 예약 + ManyChat 키워드 트리거",
-   "next": "주간 발행표 확정, FAQ 10개 작성",
+   "desc": "피드·릴스·스토리 게시물을 올리고, 한 주치를 미리 예약합니다.",
+   "how": "Meta Business Suite 예약",
+   "next": "주간 발행표 확정",
    "cmd": null,
    "link": [
     "Meta Business Suite",
@@ -794,7 +796,7 @@ const BASE = {
 /* =====================================================================
    상수
    ===================================================================== */
-const APP='command-center', VER=3, KEY='sr-hub-v3', OLD_KEY='sr-hub-v2', SNAP_KEY='sr-hub-v3-snapshot', THEME_KEY='sr-hub-theme';
+const APP='command-center', VER=4, KEY='sr-hub-v3', OLD_KEY='sr-hub-v2', SNAP_KEY='sr-hub-v3-snapshot', THEME_KEY='sr-hub-theme';
 const AREA_COLOR={auto:'var(--a-auto)',tax:'var(--a-tax)',web:'var(--a-web)',roast:'var(--a-roast)',money:'var(--a-money)'};
 const STATUS={
   idea:{l:'구상',p:0,i:'○'}, build:{l:'구축 중',p:50,i:'◐'}, test:{l:'테스트 중',p:75,i:'◕'}, live:{l:'운영 중',p:100,i:'●'}, hold:{l:'보류',p:null,i:'⏸'}
@@ -832,98 +834,121 @@ function clip(s,n=60){s=String(s??'');return s.length>n?s.slice(0,n)+'…':s}
 /* =====================================================================
    상태 저장소
    ===================================================================== */
-const AREAS=BASE.areas, TASKS=BASE.tasks, TAX_REF=BASE.taxRef;
-const TASK_BY_ID=Object.fromEntries(TASKS.map(t=>[t.id,t]));
+const AREAS=BASE.areas, BASE_TASKS=BASE.tasks, TAX_REF=BASE.taxRef;
 const AREA_BY_ID=Object.fromEntries(AREAS.map(a=>[a.id,a]));
+let TASKS=[], TASK_BY_ID=Object.fromEntries(BASE_TASKS.map(t=>[t.id,t]));
 let S=null, storageOk=true;
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 
-
-/* 이미 운영/구축해 둔 자동화(Claude 스킬)를 이 대시보드로 이전하기 위한 초기값.
-   사용자가 직접 수정한 적 없는 업무에만 한 번 적용됩니다. */
+/* ---- 지금 실제로 하고 있는 업무만 남기는 기본 구성 (SEED_V=3) ----
+   나머지 기존 업무는 삭제(휴지통)되며 "데이터 관리 → 삭제한 업무"에서 언제든 복원할 수 있습니다. */
+const SEED_V=3;
+const KEEP=new Set(['auto-0','auto-2','auto-3','web-0','roast-0','roast-2']);
 const SEED_EXISTING={
-  'auto-0':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /news (스탠다드로스트 픽셀 캐릭터 도트판 카드뉴스 + 캡션 + 블로그 글)'},
-  'auto-3':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /w-news (매주 월요일 신문 지면 카드뉴스 + 캡션 + 블로그)'},
-  'roast-0':{status:'live',executed:true,memo:'기존 운영 중: 타스(TAAS) 로스팅 프로그램. Claude 스킬 /taas — 일반 채팅에서는 수정 요청을 대기 목록에 모으고 Code에서 한 번에 반영'},
-  'roast-2':{status:'live',executed:true,memo:'기존 운영 중: 타스로그(TAAS LOG) — 타스에서 파생된 로그 프로그램'},
-  'auto-5':{status:'test',executed:false,memo:'기존 구축: Claude 스킬 /morning (아침 브리핑). 실제 사용 중이면 운영 중으로 변경'},
-  'tax-0':{status:'test',executed:false,memo:'기존 구축: 카드·영수증 내역 → 장부/세무사 전달용 CSV 정리 스킬. 실제 사용 중이면 운영 중으로 변경'},
-  'money-3':{status:'test',executed:false,memo:'기존 구축: 정부지원사업 탐색 스킬(K-Startup·기업마당·소상공인). 실제 사용 중이면 운영 중으로 변경'},
-  'money-4':{status:'test',executed:false,memo:'기존 구축: 상권 조사·경쟁사 원두 가격 비교·블로그 후기 조사 스킬. 실제 사용 중이면 운영 중으로 변경'},
-  'web-5':{status:'test',executed:false,memo:'기존 구축: 택배 배송조회(CJ대한통운·우체국)·제주 여객선 운항 확인 스킬. 실제 사용 중이면 운영 중으로 변경'}
+  'auto-0':{status:'live',executed:true,memo:'운영 중: 카드뉴스 (Claude 스킬 /news — 스탠다드로스트 픽셀 캐릭터 도트판 카드뉴스 + 캡션 + 블로그 글)'},
+  'auto-3':{status:'live',executed:true,memo:'운영 중: 주간 뉴스 (Claude 스킬 /w-news — 매주 월요일 신문 지면 카드뉴스 + 캡션 + 블로그)'},
+  'auto-2':{status:'live',executed:true,memo:'운영 중: 인스타그램 게시물 업로드'},
+  'web-0':{status:'build',executed:false,memo:'제작 중: 홈페이지'},
+  'roast-0':{status:'live',executed:true,memo:'운영 중: 타스(TAAS) 로스팅 프로그램. Claude 스킬 /taas — 일반 채팅에서는 수정 요청을 대기 목록에 모으고 Code에서 한 번에 반영'},
+  'roast-2':{status:'live',executed:true,memo:'운영 중: 타스로그(TAAS LOG) — 타스에서 파생된 로그 프로그램'},
+  'c-showcard':{status:'build',executed:false,memo:'제작 중: 매장에서 필요한 원두 쇼카드'}
 };
+const SHOWCARD={id:'c-showcard',areaId:'roast',grp:'매장',name:'매장 원두 쇼카드',desc:'매장에서 손님에게 원두를 소개하는 쇼카드를 제작합니다.',how:'원두별 이름·컵노트·로스팅 정보를 정리해 쇼카드로 제작',next:'쇼카드에 들어갈 원두 목록과 문구 정리',lv:'S',cmd:null,link:null};
 function seedTasks(st,onlyUntouched){
   let n=0;
   Object.entries(SEED_EXISTING).forEach(([id,v])=>{
     const o=st.tasks[id];if(!o)return;
-    if(onlyUntouched&&!(o.status==='idea'&&!o.updatedAt&&!o.memo&&!o.executed))return;
+    if(onlyUntouched&&o.updatedAt)return;   // 사용자가 직접 수정한 업무는 건드리지 않음
     o.status=v.status;o.executed=v.executed;o.memo=v.memo;n++;
   });
-  st.seedV=2;return n;
+  return n;
 }
-const OLD_R2_MEMO='TAAS 로그 기록 — 이미 쓰고 있다면 "운영 중"으로 바꾸고 실제 실행을 체크하세요';
-function seedPatchV2(st){
-  const o=st.tasks['roast-2'],v=SEED_EXISTING['roast-2'];
-  if(o&&((o.status==='test'&&!o.executed&&o.memo===OLD_R2_MEMO)||(o.status==='idea'&&!o.updatedAt&&!o.memo&&!o.executed))){o.status=v.status;o.executed=v.executed;o.memo=v.memo;return 1}
-  return 0;
+/* ---- 사용자가 만든 업무 정의 검증 ---- */
+function cleanCustom(c){
+  if(!c||typeof c!=='object')return null;
+  const str=(v,n,d='')=>typeof v==='string'?v.trim().slice(0,n):d;
+  const id=str(c.id,60), name=str(c.name,120);
+  if(!/^c-[A-Za-z0-9-]+$/.test(id)||!name||!AREA_BY_ID[c.areaId])return null;
+  const link=Array.isArray(c.link)&&typeof c.link[0]==='string'&&/^https?:\/\//i.test(String(c.link[1]))?[c.link[0].slice(0,60),String(c.link[1]).slice(0,500)]:null;
+  return {id,areaId:c.areaId,grp:str(c.grp,60,'추가 업무')||'추가 업무',name,short:name.slice(0,20),desc:str(c.desc,2000),how:str(c.how,2000),next:str(c.next,2000,'다음 행동을 입력하세요')||'다음 행동을 입력하세요',lv:['A','S','M'].includes(c.lv)?c.lv:'S',cmd:typeof c.cmd==='string'&&c.cmd?c.cmd.slice(0,500):null,link,legacyKey:null,order:99,createdAt:typeof c.createdAt==='string'?c.createdAt:null};
 }
 function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,updatedAt:null}}
+const catalogIds=st=>[...BASE_TASKS.map(t=>t.id),...st.custom.map(c=>c.id)];
+const defOf=(st,id)=>BASE_TASKS.find(t=>t.id===id)||st.custom.find(c=>c.id===id);
 function blankState(){
-  const tasks={};TASKS.forEach(t=>tasks[t.id]=blankTask());
-  const st0={app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,seedV:0,tasks,tax:[],history:[],integrations:Object.fromEntries(INTEGRATIONS.map(i=>[i.id,{connected:false}]))};
-  seedTasks(st0,false);return st0;
+  const st={app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,seedV:SEED_V,tasks:{},custom:[{...cleanCustom({...SHOWCARD}),createdAt:nowIso()}],deleted:{},tax:[],history:[],
+    integrations:Object.fromEntries(INTEGRATIONS.map(i=>[i.id,{connected:false}]))};
+  catalogIds(st).forEach(id=>st.tasks[id]=blankTask());
+  seedTasks(st,false);
+  BASE_TASKS.forEach(t=>{if(!KEEP.has(t.id))st.deleted[t.id]=nowIso()});
+  return st;
 }
-/* 구버전(sr-hub-v2: {"auto:0":0|1|2}) → v3 */
+function rebuildCatalog(){
+  const all=[...BASE_TASKS,...S.custom];
+  TASK_BY_ID=Object.fromEntries(all.map(t=>[t.id,t]));
+  const ai=Object.fromEntries(AREAS.map((a,i)=>[a.id,i]));
+  TASKS=all.map((t,i)=>({t,i})).filter(x=>!S.deleted[x.t.id]).sort((a,b)=>ai[a.t.areaId]-ai[b.t.areaId]||a.i-b.i).map(x=>x.t);
+}
+function setState(ns){S=ns;rebuildCatalog()}
+/* 구버전(sr-hub-v2: {"auto:0":0|1|2}) → 현재 형식 */
 function migrateLegacy(){
   let raw=null;try{raw=localStorage.getItem(OLD_KEY)}catch(e){}
   if(!raw)return null;
   let old;try{old=JSON.parse(raw)}catch(e){return null}
   if(!old||typeof old!=='object')return null;
   const st=blankState();let n=0;
-  TASKS.forEach(t=>{const v=old[t.legacyKey];if(v===0||v===1||v===2){n++;st.tasks[t.id].status=['idea','build','live'][v];if(v===2)st.tasks[t.id].executed=true;if(v>0)st.tasks[t.id].updatedAt=nowIso()}});
-  st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`이전 버전 데이터(${n}개 항목의 진행 상태)를 가져왔습니다. 기존 데이터는 삭제하지 않았습니다.`});
+  BASE_TASKS.forEach(t=>{const v=old[t.legacyKey];if(!KEEP.has(t.id))return;if(v===0||v===1||v===2){n++;st.tasks[t.id].status=['idea','build','live'][v];if(v===2)st.tasks[t.id].executed=true;if(v>0)st.tasks[t.id].updatedAt=nowIso()}});
+  st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`이전 버전 데이터를 가져왔습니다. 기존 데이터는 삭제하지 않았습니다.`});
   return st;
 }
-const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
 /* 불러온 객체를 안전하게 정규화 */
 function normalize(raw){
   const st=blankState();
   if(!raw||typeof raw!=='object')return st;
-  TASKS.forEach(t=>st.tasks[t.id]=blankTask());
   st.createdAt=typeof raw.createdAt==='string'?raw.createdAt:st.createdAt;
   st.savedAt=typeof raw.savedAt==='string'?raw.savedAt:null;
   st.lastBackupAt=typeof raw.lastBackupAt==='string'?raw.lastBackupAt:null;
+  st.custom=[];st.deleted={};
+  if(Array.isArray(raw.custom))raw.custom.forEach(c=>{const d=cleanCustom(c);if(d&&!st.custom.some(x=>x.id===d.id))st.custom.push(d)});
+  const ids=catalogIds(st);st.tasks={};ids.forEach(id=>st.tasks[id]=blankTask());
+  if(raw.deleted&&typeof raw.deleted==='object')Object.keys(raw.deleted).forEach(id=>{if(ids.includes(id))st.deleted[id]=typeof raw.deleted[id]==='string'?raw.deleted[id]:nowIso()});
   const src=raw.tasks&&typeof raw.tasks==='object'?raw.tasks:{};
-  TASKS.forEach(t=>{const r=src[t.id];if(!r||typeof r!=='object')return;const o=st.tasks[t.id];
+  ids.forEach(id=>{const r=src[id];if(!r||typeof r!=='object')return;const o=st.tasks[id],d=defOf(st,id);
     if(STATUS[r.status])o.status=r.status;
     if(PRIO[r.priority])o.priority=r.priority;
     if(typeof r.due==='string'&&(r.due===''||isDate(r.due)))o.due=r.due;
     o.executed=r.executed===true;o.today=r.today===true;
     if(typeof r.memo==='string')o.memo=r.memo.slice(0,20000);
-    if(typeof r.next==='string'&&r.next!==t.next)o.next=r.next.slice(0,2000);
+    if(typeof r.next==='string'&&r.next!==d.next)o.next=r.next.slice(0,2000);
     if(typeof r.updatedAt==='string')o.updatedAt=r.updatedAt;
   });
   if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true}));
   if(Array.isArray(raw.history))st.history=raw.history.filter(h=>h&&typeof h==='object'&&typeof h.t==='string').slice(-600);
-  if(raw.seedV!==1&&raw.seedV!==2){const n=seedTasks(st,true);if(n)st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`기존에 운영·구축해 둔 자동화 ${n}건(타스, 카드뉴스 등)을 이전했습니다. 상태는 직접 확인해 조정하세요.`})}
-  else if(raw.seedV===1&&seedPatchV2(st))st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'타스로그를 타스에서 파생된 운영 중 프로그램으로 반영했습니다.'});
-  st.seedV=2;
-  if(raw.integrations&&typeof raw.integrations==='object')INTEGRATIONS.forEach(i=>{if(raw.integrations[i.id])st.integrations[i.id]={connected:false}}); // 이번 버전은 연동 미구현 → 항상 미연결
+  /* 이전 버전 데이터: 실제로 하는 업무만 남기도록 한 번 정리 */
+  if(raw.seedV!==SEED_V){
+    if(!st.custom.some(c=>c.id==='c-showcard')){st.custom.push({...cleanCustom({...SHOWCARD}),createdAt:nowIso()});st.tasks['c-showcard']=blankTask()}
+    const n=seedTasks(st,true);let pr=0;
+    BASE_TASKS.forEach(t=>{if(!KEEP.has(t.id)&&!st.deleted[t.id]&&!st.tasks[t.id].updatedAt){st.deleted[t.id]=nowIso();pr++}});
+    st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`지금 하고 있는 업무만 남기도록 정리했습니다(삭제 ${pr}건 · 상태 반영 ${n}건). 삭제한 업무는 "데이터 관리 → 삭제한 업무"에서 복원할 수 있습니다.`});
+  }
+  st.seedV=SEED_V;
+  if(raw.integrations&&typeof raw.integrations==='object')INTEGRATIONS.forEach(i=>{if(raw.integrations[i.id])st.integrations[i.id]={connected:false}});
   return st;
 }
 function load(){
   let raw=null;
   try{raw=localStorage.getItem(KEY)}catch(e){storageOk=false}
-  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){S=normalize(o);if(o.seedV!==2)save();return}}catch(e){}}
+  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){setState(normalize(o));if(o.seedV!==SEED_V||o.version!==VER)save();return}}catch(e){}}
   const mig=migrateLegacy();
-  S=mig||blankState();
+  setState(mig||blankState());
   if(mig)save();
 }
-let saveTimer=null;
 function save(){
   S.savedAt=nowIso();
   try{localStorage.setItem(KEY,JSON.stringify(S));storageOk=true}catch(e){storageOk=false}
   renderSaveChip();
 }
+
 /* =====================================================================
    업무 조회
    ===================================================================== */
@@ -1052,7 +1077,7 @@ function header(title,sub){
   const d=new Date();
   return `<header class="hd"><div><button class="btn sm menu-btn" data-act="menu" aria-label="메뉴 열기" style="margin-bottom:8px">☰ 메뉴</button><div class="ey">TAAS · 타스</div><h1>${title}</h1><p>${sub}</p></div>
   <div class="meta"><span class="chip">${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${WD[d.getDay()]})</span><span class="chip" id="saveChip"></span>
-  <button class="btn sm" data-act="undo" ${undoable()?'':'disabled'} title="Ctrl+Z">↩ 실행 취소</button></div></header>`;
+  <button class="btn pri sm" data-act="newtask">+ 업무 추가</button><button class="btn sm" data-act="undo" ${undoable()?'':'disabled'} title="Ctrl+Z">↩ 실행 취소</button></div></header>`;
 }
 function tagsFor(t,withArea){
   let h='';
@@ -1086,6 +1111,8 @@ function renderHome(){
   let guide;
   if(todayList.length)guide=[`오늘 가장 먼저 할 일`,`${esc(todayList[0].name)} — ${esc(clip(todayList[0].next,60))}`,todayList[0].id];
   else if(all.every(t=>!t.due&&t.status==='idea'&&t.priority==='normal'))guide=['시작하기','업무의 중요도와 목표 완료일을 정하면 "오늘의 업무"가 자동으로 만들어집니다. 먼저 가장 급한 업무를 열어보세요.',null];
+  else if(all.some(t=>t.status==='build'||t.status==='test')){const w=all.find(t=>t.status==='build'||t.status==='test');guide=['지금 진행 중인 업무',`${esc(w.name)} — ${esc(clip(w.next,60))}`,w.id]}
+  else if(!all.length)guide=['업무가 없습니다','오른쪽 위 "+ 업무 추가"로 지금 하고 있는 일을 추가하세요.',null];
   else guide=['오늘 지정된 업무가 없습니다','긴급 업무나 구축 중인 업무의 다음 행동을 확인하고, 목표 완료일을 정해 보세요.',null];
   const recent=S.history.filter(h=>!h.undone).slice(-8).reverse();
   const card=(k,v,sub,flt,unit='')=>`<button class="card stat" data-flt='${esc(JSON.stringify(flt||{}))}'><div class="k">${k}</div><div class="v">${v}<small>${unit}</small></div><div class="s">${sub}</div></button>`;
@@ -1178,6 +1205,7 @@ function renderList(){
     <div style="min-width:180px"><div style="font-size:26px;font-weight:700">${st.pct}<small style="font-size:12px;font-weight:400;color:var(--muted)">% 진행 · ${st.total}개</small></div><div class="bar"><i style="width:${st.pct}%;background:${AREA_COLOR[a.id]}"></i></div></div></div></div>`;
     if(a.id==='tax')h+=taxPanel(true);
   }
+  if(!base.length){h+=`<div class="empty">${isArea?'이 영역에는 아직 업무가 없습니다.':'업무가 없습니다.'}<br>지금 하고 있는 일을 직접 추가해 보세요.<br><button class="btn pri" style="margin-top:12px" data-act="newtask">+ 업무 추가</button></div>`;return h}
   h+=toolbar();
   h+=`<p class="res" role="status">${V.today?'<button class="btn sm" data-act="clearf" style="margin-right:8px">오늘 업무만 보는 중 ✕</button>':''}${list.length}개 표시 (전체 ${base.length}개)</p>`;
   if(!list.length)h+=`<div class="empty">조건에 맞는 업무가 없습니다.<br><button class="btn sm" style="margin-top:10px" data-act="clearf">필터 초기화</button></div>`;
@@ -1221,7 +1249,8 @@ function renderData(){
   const hist=S.history.slice(-100).reverse();
   let size='';try{size=(new Blob([JSON.stringify(S)]).size/1024).toFixed(1)+' KB'}catch(e){}
   let snap=null;try{snap=JSON.parse(localStorage.getItem(SNAP_KEY)||'null')}catch(e){}
-  let h=header('데이터 관리','백업 · 복원 · 변경 이력 · 초기화');
+  const trash=Object.keys(S.deleted).filter(id=>TASK_BY_ID[id]).map(id=>T(id)).sort((a,b)=>S.deleted[b.id].localeCompare(S.deleted[a.id]));
+  let h=header('데이터 관리','백업 · 복원 · 삭제한 업무 · 변경 이력 · 초기화');
   h+=`<div class="two">
   <div>
    <section class="card pad"><h3 style="margin:0 0 6px">JSON 백업</h3>
@@ -1235,6 +1264,9 @@ function renderData(){
    <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">외부 서비스 연동</h3>
     <p class="res">이번 버전은 외부 서비스와 연결되어 있지 않습니다. 아래는 향후 연동을 위한 준비 항목입니다.</p>
     <table class="tbl"><tbody>${INTEGRATIONS.map(i=>`<tr><td><b>${i.name}</b><br><span style="font-size:12.5px;color:var(--muted)">${i.desc}</span></td><td><span class="tg">미연결 · 구현 예정</span></td></tr>`).join('')}</tbody></table></section>
+   <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">삭제한 업무 <span class="tg">${trash.length}개</span></h3>
+    <p class="res">삭제한 업무는 여기에 보관됩니다. 복원하면 메모와 진행 상태가 그대로 돌아옵니다.</p>
+    ${trash.length?`<table class="tbl"><tbody>${trash.map(x=>`<tr><td><b>${esc(x.name)}</b><br><span style="font-size:12.5px;color:var(--muted)">${esc(x.area.name)} · 삭제 ${fmtFull(S.deleted[x.id])}${x.id.startsWith('c-')?' · 직접 추가한 업무':''}</span></td><td style="white-space:nowrap;text-align:right"><button class="btn sm" data-act="restore" data-id="${x.id}">복원</button>${x.id.startsWith('c-')?` <button class="btn sm danger" data-act="purge" data-id="${x.id}">완전 삭제</button>`:''}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">삭제한 업무가 없습니다.</div>'}</section>
    <section class="card pad" style="margin-top:14px;border-color:color-mix(in srgb,var(--risk) 35%,var(--line))"><h3 style="margin:0 0 6px">데이터 초기화</h3>
     <p class="res">모든 업무의 진행 상태·메모·목표일·변경 이력·세무 확정 일정이 지워지고 5개 영역과 전체 업무의 기본 내용만 남습니다. 초기화 전 JSON 백업을 권장합니다.</p><button class="btn danger" data-act="reset">전체 데이터 초기화…</button></section>
   </div>
@@ -1262,12 +1294,13 @@ function renderDrawer(){
      <div class="fl">오늘 할 일<button type="button" class="btn" data-act="today" data-id="${t.id}" aria-pressed="${t.today}" style="justify-content:flex-start">${t.today?'★ 오늘 할 일로 지정됨':'☆ 오늘 할 일로 지정'}</button></div></div>
     ${isOverdue(t)?`<p class="note" style="margin:10px 0 0;background:var(--risk-soft)">목표일이 ${-daysFrom(t.due)}일 지났습니다. 날짜를 바꾸거나 상태를 갱신하세요.</p>`:''}
     ${t.due?`<button type="button" class="btn sm" style="margin-top:8px" data-act="duenone">목표일 지우기</button>`:''}</fieldset>
-   <div class="dx"><h4>업무 설명</h4><p>${esc(t.desc)}</p></div>
-   <div class="dx"><h4>실행 방법</h4><p>${esc(t.how)}</p></div>
+   ${t.desc?`<div class="dx"><h4>업무 설명</h4><p>${esc(t.desc)}</p></div>`:''}
+   ${t.how?`<div class="dx"><h4>실행 방법</h4><p>${esc(t.how)}</p></div>`:''}
    <div class="dx"><h4>자동화 목표</h4><p>${LV[t.lv]} <span style="color:var(--muted);font-size:12.5px">· 설계 단계의 목표이며 외부 서비스와 연동되어 있지 않습니다</span></p></div>
    ${t.cmd||t.link?`<div class="dx"><h4>바로가기</h4><div class="row2">${t.cmd?`<button class="btn sm" data-act="copy" data-cmd="${encodeURIComponent(t.cmd)}">⌘ ${esc(t.cmd)} <span style="color:var(--muted)">복사</span></button>`:''}${t.link?`<a class="btn sm" href="${esc(t.link[1])}" target="_blank" rel="noopener noreferrer">↗ ${esc(t.link[0])}</a>`:''}</div>${t.cmd?`<p style="font-size:12px;color:var(--muted);margin-top:6px">명령어는 Claude에 붙여넣어 쓰는 문구입니다. 이 화면이 직접 실행하지 않습니다.</p>`:''}</div>`:''}
    <div class="dx"><h4><label for="f-memo">업무 메모</label></h4><textarea class="memo" id="f-memo" data-t="memo" placeholder="자유롭게 기록하세요. 입력하면 자동 저장됩니다.">${esc(t.memo)}</textarea><div class="saved" id="saved-memo">${t.updatedAt?'':'아직 수정 기록이 없습니다'}</div></div>
    <div class="note">마지막 수정: <b id="upd">${t.updatedAt?fmtFull(t.updatedAt):'수정 기록 없음'}</b></div>
+   <div class="row2" style="margin-top:4px">${t.id.startsWith('c-')?`<button class="btn sm" data-act="edittask">업무 정보 수정</button>`:''}<button class="btn sm danger" data-act="deltask">업무 삭제</button></div>
    <div class="dx"><h4>이 업무의 변경 이력</h4>${hs.length?`<ul class="hist">${hs.map(histItem).join('')}</ul>`:'<p style="color:var(--muted);font-size:13.5px">변경 이력이 없습니다.</p>'}</div>
   </div>`;
 }
@@ -1299,16 +1332,20 @@ function renderAll(){
   if(V.openId)renderDrawerKeep();
 }
 function renderDrawerKeep(){const y=$('#drawer').scrollTop;const f=document.activeElement&&document.activeElement.id;renderDrawer();$('#drawer').scrollTop=y;if(f){const e=document.getElementById(f);if(e&&e.focus&&f!=='dtitle')e.focus()}}
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2600)}
+function toast(msg,label,fn){
+  const t=$('#toast');t.textContent='';const sp=document.createElement('span');sp.textContent=msg;t.append(sp);
+  if(label){const b=document.createElement('button');b.type='button';b.className='tact';b.textContent=label;b.onclick=()=>{t.classList.remove('on');fn()};t.append(b)}
+  t.classList.add('on');t.classList.toggle('act',!!label);clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),label?8000:2600);
+}
 
 /* =====================================================================
    백업 / 복원
    ===================================================================== */
 function exportData(){
   flushTyping();
-  const merged=TASKS.map(t=>{const x=T(t.id);return {id:x.id,areaId:x.areaId,area:x.area.name,group:x.grp,name:x.name,description:x.desc,howTo:x.how,defaultNext:x.nextDefault,command:x.cmd,link:x.link,automationTarget:x.lv,
-     priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt}});
-  const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
+  const merged=Object.keys(TASK_BY_ID).map(id=>{const x=T(id);return {id:x.id,areaId:x.areaId,area:x.area.name,group:x.grp,name:x.name,description:x.desc,howTo:x.how,defaultNext:x.nextDefault,command:x.cmd,link:x.link,automationTarget:x.lv,
+     priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt,deleted:!!S.deleted[id]}});
+  const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,customTasks:S.custom,deleted:S.deleted,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
   const json=JSON.stringify(doc,null,2);
   const d=new Date(),name=`taas-center-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
   const done=()=>{S.lastBackupAt=nowIso();save();renderAll();toast('JSON 백업을 저장했습니다: '+name)};
@@ -1326,7 +1363,7 @@ function exportData(){
     }).catch(viaLink);
   }else viaLink();
 }
-/* 가져오기 검증: 오류 문자열 배열과 정규화된 상태를 돌려준다 */
+/* 가져오기 검증: 오류 문자열 배열과 정규화된 데이터를 돌려준다 */
 function validateImport(text){
   const errs=[];let doc;
   try{doc=JSON.parse(text)}catch(e){return {errs:['올바른 JSON 형식이 아닙니다.']}}
@@ -1336,11 +1373,17 @@ function validateImport(text){
   else if(doc.version>VER)errs.push(`지원하지 않는 데이터 버전입니다(파일 v${doc.version} / 지원 v${VER} 이하).`);
   if(!Array.isArray(doc.tasks))errs.push('업무 데이터(tasks)가 없습니다.');
   if(errs.length)return {errs};
-  let known=0,unknown=0;const tasks={};
+  const customs=[];
+  if(doc.customTasks!==undefined){
+    if(!Array.isArray(doc.customTasks))errs.push('추가 업무 형식 오류');
+    else doc.customTasks.forEach((c,i)=>{const d=cleanCustom(c);if(!d)errs.push(`추가 업무 ${i+1}번: 형식 오류`);else customs.push(d)});
+  }
+  const known=new Set([...BASE_TASKS.map(t=>t.id),...customs.map(c=>c.id)]);
+  let kn=0,unknown=0;const tasks={};
   doc.tasks.forEach((r,i)=>{
     if(!r||typeof r!=='object'||typeof r.id!=='string'){errs.push(`업무 ${i+1}번: id가 없습니다.`);return}
-    if(!TASK_BY_ID[r.id]){unknown++;return}
-    known++;
+    if(!known.has(r.id)){unknown++;return}
+    kn++;
     if(r.status!==undefined&&!STATUS[r.status])errs.push(`${r.id}: 알 수 없는 진행 상태 "${r.status}"`);
     if(r.priority!==undefined&&!PRIO[r.priority])errs.push(`${r.id}: 알 수 없는 중요도 "${r.priority}"`);
     if(r.due!==undefined&&r.due!==''&&!(typeof r.due==='string'&&isDate(r.due)))errs.push(`${r.id}: 목표일 형식 오류`);
@@ -1348,11 +1391,16 @@ function validateImport(text){
     if(r.memo!==undefined&&typeof r.memo!=='string')errs.push(`${r.id}: 메모 형식 오류`);
     tasks[r.id]={priority:r.priority,due:r.due,status:r.status,executed:r.executed,today:r.today,memo:r.memo,next:r.next,updatedAt:r.updatedAt};
   });
-  if(known===0)errs.push('인식 가능한 업무가 하나도 없습니다.');
+  if(kn===0)errs.push('인식 가능한 업무가 하나도 없습니다.');
+  let deleted={};
+  if(doc.deleted!==undefined){
+    if(!doc.deleted||typeof doc.deleted!=='object'||Array.isArray(doc.deleted))errs.push('삭제 목록 형식 오류');
+    else Object.keys(doc.deleted).forEach(id=>{if(known.has(id)&&typeof doc.deleted[id]==='string')deleted[id]=doc.deleted[id]});
+  }
   if(doc.taxConfirmed!==undefined&&!Array.isArray(doc.taxConfirmed))errs.push('세무 확정 일정 형식 오류');
   if(doc.history!==undefined&&!Array.isArray(doc.history))errs.push('변경 이력 형식 오류');
   if(errs.length)return {errs:errs.slice(0,8).concat(errs.length>8?[`…외 ${errs.length-8}건`]:[])};
-  return {errs:[],doc,tasks,known,unknown,count:doc.tasks.length};
+  return {errs:[],doc,tasks,customs,deleted,hasDeleted:doc.deleted!==undefined,known:kn,unknown,count:doc.tasks.length};
 }
 function snapshot(){try{localStorage.setItem(SNAP_KEY,JSON.stringify({at:nowIso(),data:S}))}catch(e){}}
 function importFlow(file){
@@ -1364,7 +1412,7 @@ function importFlow(file){
     const v=validateImport(String(rd.result));
     if(v.errs.length){showDlg(`<h3>가져올 수 없는 파일입니다</h3><p>기존 데이터는 그대로 유지됩니다(덮어쓰지 않았습니다).</p><ul style="font-size:13.5px;color:var(--risk);padding-left:18px;margin:0 0 4px">${v.errs.map(e=>`<li>${esc(e)}</li>`).join('')}</ul><div class="ft"><button class="btn" data-act="dclose">닫기</button></div>`);return}
     window.__imp=v;
-    showDlg(`<h3>JSON 가져오기</h3><p>파일 내보낸 시각: <b>${fmtFull(v.doc.exportedAt)}</b><br>인식된 업무 ${v.known}개${v.unknown?` · 알 수 없는 업무 ${v.unknown}개(무시)`:''} · 세무 확정 일정 ${(v.doc.taxConfirmed||[]).length}건 · 변경 이력 ${(v.doc.history||[]).length}건</p>
+    showDlg(`<h3>JSON 가져오기</h3><p>파일 내보낸 시각: <b>${fmtFull(v.doc.exportedAt)}</b><br>인식된 업무 ${v.known}개${v.unknown?` · 알 수 없는 업무 ${v.unknown}개(무시)`:''} · 추가 업무 ${v.customs.length}개 · 세무 확정 일정 ${(v.doc.taxConfirmed||[]).length}건 · 변경 이력 ${(v.doc.history||[]).length}건</p>
      <fieldset class="fs" style="margin-bottom:8px"><legend>가져오기 방식</legend>
       <label class="ck"><input type="radio" name="imode" value="replace" checked> <span><b>전체 교체</b> — 현재 데이터를 파일 내용으로 바꿉니다(파일에 없는 변경은 사라집니다)</span></label>
       <label class="ck" style="align-items:flex-start"><input type="radio" name="imode" value="merge" style="margin-top:9px"> <span><b>병합</b> — 파일에 있는 업무만 파일 값으로 덮어쓰고, 나머지 업무는 현재 값을 유지합니다. 세무 일정·변경 이력은 합칩니다</span></label></fieldset>
@@ -1376,18 +1424,19 @@ function importFlow(file){
 function doImport(mode){
   const v=window.__imp;if(!v)return;
   snapshot();
-  const incoming=normalize({tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),tax:v.doc.taxConfirmed,history:v.doc.history,seedV:2});
+  const raw={tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),custom:v.customs,deleted:v.deleted,tax:v.doc.taxConfirmed,history:v.doc.history,seedV:SEED_V};
+  const incoming=normalize(raw);
   if(mode==='replace'){
-    const keep={lastBackupAt:S.lastBackupAt,createdAt:S.createdAt};
-    const nt=blankState();
-    Object.keys(v.tasks).forEach(id=>nt.tasks[id]=incoming.tasks[id]);
-    nt.tax=incoming.tax;nt.history=incoming.history;nt.lastBackupAt=keep.lastBackupAt;nt.createdAt=keep.createdAt;
-    S=nt;
+    incoming.lastBackupAt=S.lastBackupAt;incoming.createdAt=S.createdAt;
+    setState(incoming);
   }else{
-    Object.keys(v.tasks).forEach(id=>S.tasks[id]=incoming.tasks[id]);
+    const have=new Set(S.custom.map(c=>c.id));
+    incoming.custom.forEach(c=>{if(!have.has(c.id)){S.custom.push(c);S.tasks[c.id]=blankTask()}});
+    Object.keys(v.tasks).forEach(id=>{S.tasks[id]=incoming.tasks[id];if(v.hasDeleted){if(v.deleted[id])S.deleted[id]=v.deleted[id];else delete S.deleted[id]}});
     const ids=new Set(S.tax.map(x=>x.id));incoming.tax.forEach(x=>{if(!ids.has(x.id))S.tax.push(x)});
     const hid=new Set(S.history.map(h=>h.id));incoming.history.forEach(h=>{if(!hid.has(h.id))S.history.push(h)});
     S.history.sort((a,b)=>a.t.localeCompare(b.t));
+    rebuildCatalog();
   }
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`JSON 파일을 가져왔습니다(${mode==='replace'?'전체 교체':'병합'}, 업무 ${v.known}개).`});
   save();window.__imp=null;closeDlg();renderAll();toast('가져오기를 완료했습니다');
@@ -1396,12 +1445,12 @@ function restoreSnap(){
   let snap=null;try{snap=JSON.parse(localStorage.getItem(SNAP_KEY)||'null')}catch(e){}
   if(!snap||!snap.data){toast('복구할 상태가 없습니다');return}
   if(!confirm(`${fmtFull(snap.at)} 시점의 상태로 되돌릴까요?\n현재 상태는 덮어써집니다.`))return;
-  S=normalize(snap.data);S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'가져오기/초기화 이전 상태로 되돌렸습니다.'});
+  setState(normalize(snap.data));S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'가져오기/초기화 이전 상태로 되돌렸습니다.'});
   try{localStorage.removeItem(SNAP_KEY)}catch(e){}
   save();renderAll();toast('되돌렸습니다');
 }
 function resetFlow(){
-  showDlg(`<h3>전체 데이터 초기화</h3><p>모든 업무의 상태·중요도·목표일·실제 실행 여부·메모·세무 확정 일정·변경 이력이 삭제됩니다. 5개 영역과 전체 업무의 기본 내용은 유지됩니다.</p>
+  showDlg(`<h3>전체 데이터 초기화</h3><p>모든 업무의 상태·중요도·목표일·실제 실행 여부·메모·세무 확정 일정·변경 이력이 삭제되고, 직접 추가한 업무도 사라집니다. 처음 기본 구성(지금 하는 업무만 있는 상태)으로 돌아갑니다.</p>
    <p><b>먼저 JSON 백업을 받아두는 것을 강력히 권장합니다.</b></p>
    <div class="row2" style="margin-bottom:10px"><button class="btn" data-act="export">지금 JSON 백업하기</button></div>
    <label class="ck" style="align-items:flex-start"><input type="checkbox" id="rs1" style="margin-top:3px"> <span>데이터가 삭제된다는 것을 이해했고, 필요한 백업을 마쳤습니다.</span></label>
@@ -1411,10 +1460,84 @@ function resetFlow(){
 function doReset(){
   snapshot();
   const keepBackup=S.lastBackupAt;
-  S=blankState();S.lastBackupAt=keepBackup;
-  S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'전체 데이터를 초기화했습니다.'});
+  const ns=blankState();ns.lastBackupAt=keepBackup;
+  ns.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'전체 데이터를 초기화했습니다.'});
+  setState(ns);V.openId=null;
   save();closeDlg();renderAll();toast('초기화했습니다. 직전 상태는 "데이터 관리"에서 복구할 수 있습니다.');
 }
+
+/* =====================================================================
+   업무 추가 · 수정 · 삭제(휴지통)
+   ===================================================================== */
+function taskForm(id){
+  const c=id?S.custom.find(x=>x.id===id):null;
+  const area=c?c.areaId:(V.view==='area'?V.area:AREAS[0].id);
+  const groups=[...new Set([...BASE_TASKS,...S.custom].map(t=>t.grp))];
+  const v=c||{name:'',grp:'',desc:'',how:'',next:''};
+  showDlg(`<h3>${c?'업무 정보 수정':'업무 추가'}</h3>
+  <form id="taskForm" data-id="${esc(id||'')}">
+   <label class="fl" for="tf-name" style="margin-bottom:10px">업무명 *<input class="in" id="tf-name" name="name" required maxlength="120" value="${esc(v.name)}" autocomplete="off"></label>
+   <div class="kv" style="margin-bottom:10px"><label class="fl" for="tf-area">업무 영역<select id="tf-area" name="areaId" class="in">${AREAS.map(a=>`<option value="${a.id}" ${a.id===area?'selected':''}>${esc(a.name)}</option>`).join('')}</select></label>
+    <label class="fl" for="tf-grp">묶음(선택)<input class="in" id="tf-grp" name="grp" list="grplist" maxlength="60" value="${esc(v.grp)}" placeholder="예: 인스타그램"><datalist id="grplist">${groups.map(g=>`<option value="${esc(g)}">`).join('')}</datalist></label></div>
+   <label class="fl" for="tf-desc" style="margin-bottom:10px">업무 설명<textarea class="in" id="tf-desc" name="desc" rows="2" maxlength="2000">${esc(v.desc)}</textarea></label>
+   <label class="fl" for="tf-how" style="margin-bottom:10px">실행 방법<textarea class="in" id="tf-how" name="how" rows="2" maxlength="2000">${esc(v.how)}</textarea></label>
+   <label class="fl" for="tf-next" style="margin-bottom:10px">다음 행동<input class="in" id="tf-next" name="next" maxlength="500" value="${esc(c?c.next:'')}"></label>
+   ${c?'':`<div class="kv"><label class="fl" for="tf-st">진행 상태<select id="tf-st" name="status" class="in">${STATUS_ORDER.map(k=>`<option value="${k}" ${k==='idea'?'selected':''}>${STATUS[k].l}</option>`).join('')}</select></label>
+    <label class="fl" for="tf-pr">중요도<select id="tf-pr" name="priority" class="in">${['urgent','normal','low'].map(k=>`<option value="${k}" ${k==='normal'?'selected':''}>${PRIO[k].l}</option>`).join('')}</select></label></div>
+    <label class="fl" for="tf-due" style="margin-top:10px">목표 완료일(선택)<input class="in" type="date" id="tf-due" name="due"></label>`}
+   <div class="ft"><button type="button" class="btn" data-act="dclose">취소</button><button type="submit" class="btn pri">${c?'수정 저장':'업무 추가'}</button></div></form>`);
+  setTimeout(()=>{const n=$('#tf-name');n&&n.focus()},30);
+}
+function submitTaskForm(form){
+  const fd=new FormData(form),id=form.dataset.id;
+  const name=String(fd.get('name')||'').trim();if(!name){toast('업무명을 입력하세요');return}
+  const f={areaId:String(fd.get('areaId')),grp:String(fd.get('grp')||'').trim(),desc:String(fd.get('desc')||'').trim(),how:String(fd.get('how')||'').trim(),next:String(fd.get('next')||'').trim()};
+  if(!AREA_BY_ID[f.areaId]){toast('업무 영역을 확인하세요');return}
+  if(id){
+    const c=S.custom.find(x=>x.id===id);if(!c)return;
+    const d=cleanCustom({...c,...f,name,id});if(!d)return;
+    const keepNext=S.tasks[id].next;
+    Object.assign(c,d,{createdAt:c.createdAt});
+    S.tasks[id].next=keepNext===c.next?null:keepNext;
+    S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 정보 수정`});
+    rebuildCatalog();save();closeDlg();renderAll();toast('수정했습니다');return;
+  }
+  const nid='c-'+uid();
+  const d=cleanCustom({id:nid,name,...f,lv:'S',createdAt:nowIso()});if(!d)return;
+  const status=STATUS[fd.get('status')]?String(fd.get('status')):'idea', prio=PRIO[fd.get('priority')]?String(fd.get('priority')):'normal', due=String(fd.get('due')||'');
+  S.custom.push(d);
+  S.tasks[nid]={...blankTask(),status,priority:prio,due:isDate(due)?due:'',executed:status==='live',updatedAt:nowIso()};
+  S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 추가 (${AREA_BY_ID[d.areaId].name})`});
+  rebuildCatalog();save();closeDlg();renderAll();toast('업무를 추가했습니다');openTask(nid);
+}
+function deleteFlow(id){
+  const t=T(id);
+  showDlg(`<h3>업무 삭제</h3><p><b>${esc(t.name)}</b> 업무를 삭제할까요?</p><p>삭제한 업무는 <b>데이터 관리 → 삭제한 업무</b>에서 메모·상태와 함께 언제든 복원할 수 있습니다.</p>
+   <div class="ft"><button class="btn" data-act="dclose">취소</button><button class="btn danger" data-act="dodel" data-id="${esc(id)}">삭제</button></div>`);
+}
+function doDelete(id){
+  flushTyping();
+  const name=TASK_BY_ID[id].name;
+  S.deleted[id]=nowIso();
+  S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${name}" 삭제 (복원 가능)`});
+  if(V.openId===id){V.openId=null;$('#ov').classList.remove('on');const d=$('#drawer');d.classList.remove('on');d.setAttribute('aria-hidden','true')}
+  rebuildCatalog();save();closeDlg();renderAll();
+  toast(`"${clip(name,20)}" 삭제했습니다`,'되돌리기',()=>restoreTask(id,true));
+}
+function restoreTask(id,quiet){
+  if(!S.deleted[id])return;
+  delete S.deleted[id];
+  S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${TASK_BY_ID[id].name}" 복원`});
+  rebuildCatalog();save();renderAll();toast('복원했습니다');
+}
+function purgeTask(id){
+  const c=S.custom.find(x=>x.id===id);if(!c||!S.deleted[id])return;
+  if(!confirm(`"${c.name}" 업무를 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`))return;
+  S.custom=S.custom.filter(x=>x.id!==id);delete S.tasks[id];delete S.deleted[id];
+  S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${c.name}" 완전 삭제`});
+  rebuildCatalog();save();renderAll();toast('완전히 삭제했습니다');
+}
+
 function showDlg(html){const d=$('#dlg');$('#dlgbody').innerHTML=html;if(!d.open)d.showModal()}
 function closeDlg(){const d=$('#dlg');if(d.open)d.close()}
 
@@ -1453,6 +1576,12 @@ document.addEventListener('click',e=>{
     case 'restoresnap':restoreSnap();break;
     case 'reset':resetFlow();break;
     case 'doreset':doReset();break;
+    case 'newtask':taskForm();break;
+    case 'edittask':taskForm(V.openId);break;
+    case 'deltask':deleteFlow(V.openId);break;
+    case 'dodel':doDelete(el.dataset.id);break;
+    case 'restore':restoreTask(el.dataset.id);break;
+    case 'purge':purgeTask(el.dataset.id);break;
     case 'taxnew':V.taxForm={name:'',date:'',memo:''};renderAll();break;
     case 'taxcancel':V.taxForm=null;renderAll();break;
     case 'taxfromref':{const r=TAX_REF[+el.dataset.i];V.taxForm={name:r.n,date:'',memo:'',hint:`참고: 일반적으로 ${r.note}. 실제 신고일은 사업자 유형에 따라 다르므로 직접 확인한 날짜를 입력하세요.`};renderAll();$('#taxForm')&&$('#taxForm').scrollIntoView({block:'center',behavior:reduceMotion()?'auto':'smooth'});break}
@@ -1462,6 +1591,7 @@ document.addEventListener('click',e=>{
   }
 });
 document.addEventListener('submit',e=>{
+  if(e.target.id==='taskForm'){e.preventDefault();submitTaskForm(e.target);return}
   if(e.target.id!=='taxForm')return;e.preventDefault();
   const fd=new FormData(e.target),name=String(fd.get('name')||'').trim(),date=String(fd.get('date')||''),memo=String(fd.get('memo')||'').trim();
   if(!name||!isDate(date)){toast('이름과 날짜를 확인하세요');return}
