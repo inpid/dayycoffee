@@ -10,16 +10,13 @@
 <meta name="robots" content="noindex,nofollow">
 <style>
 :root{
-  --bg:#f5f5f7; --card:#fff; --text:#1d1d1f; --muted:#6e6e73; --line:#d2d2d7; --accent:#c1622d;
-  --glass:rgba(255,255,255,.72); --shadow:0 10px 30px rgba(0,0,0,.12);
-  --s0:#c7c7cc; --s1:#f5a623; --s2:#34c759;
-}
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#000; --card:#1c1c1e; --text:#f5f5f7; --muted:#a1a1a6; --line:#3a3a3c; --glass:rgba(40,40,44,.72); --shadow:0 10px 30px rgba(0,0,0,.6); --s0:#48484a; }
+  --bg:#02090f; --card:rgba(6,26,40,.82); --text:#d7f3ff; --muted:#7fa6b8; --line:#134a60; --accent:#2ee6ff;
+  --glass:rgba(4,28,44,.72); --shadow:0 0 24px rgba(46,230,255,.12);
+  --s0:#3b6174; --s1:#ffb020; --s2:#2dff9a;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0}
-body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
+body{background:radial-gradient(1200px 700px at 50% 30%,#06263a 0%,#02090f 70%) fixed,var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;overflow-x:hidden}
 button{font:inherit;color:inherit;cursor:pointer}
 header.top{max-width:1100px;margin:0 auto;padding:36px 24px 0;text-align:center}
 .eyebrow{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);font-weight:700}
@@ -33,7 +30,7 @@ h1 span{background:linear-gradient(90deg,#c1622d,#e9a23b 55%,#7c9a44);-webkit-ba
 /* ---------- 3D stage ---------- */
 #stage{position:relative;z-index:0;isolation:isolate;height:min(78vh,760px);min-height:520px;overflow:hidden;cursor:grab;touch-action:pan-y;user-select:none;-webkit-user-select:none}
 #stage.drag{cursor:grabbing}
-#stage::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,color-mix(in srgb,var(--accent) 16%,transparent),transparent 62%);pointer-events:none}
+#stage::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 55%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 62%);pointer-events:none}
 #lines{position:absolute;inset:0;pointer-events:none;overflow:visible}
 #nodes{position:absolute;inset:0}
 .n3{position:absolute;left:0;top:0;will-change:transform,opacity}
@@ -108,14 +105,66 @@ footer{max-width:1100px;margin:40px auto;padding:0 24px;color:var(--muted);font-
 table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border-radius:18px;overflow:hidden;border:1px solid var(--line)}
 td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border:0}th{color:var(--muted);font-size:12px}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+
+/* ===== HUD skin ===== */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background-image:linear-gradient(#2ee6ff0d 1px,transparent 1px),linear-gradient(90deg,#2ee6ff0d 1px,transparent 1px);background-size:48px 48px;mask-image:radial-gradient(ellipse at 50% 40%,#000 30%,transparent 80%);-webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 30%,transparent 80%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;background:repeating-linear-gradient(0deg,transparent 0 3px,#00000022 3px 4px);opacity:.5}
+header.top{position:relative;z-index:1;padding-top:26px}
+.eyebrow{color:var(--accent);text-shadow:0 0 12px var(--accent)}
+h1{font-size:clamp(22px,3.4vw,36px);letter-spacing:.02em;font-weight:600}
+h1 span{background:linear-gradient(90deg,#2ee6ff,#b8f4ff 60%,#2dff9a);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pill{background:#06263a99;border-color:#134a60;color:var(--muted);backdrop-filter:blur(6px)}
+.pill:hover,.pill.on{color:#fff;border-color:var(--accent);box-shadow:0 0 12px #2ee6ff55}
+.console{position:relative;z-index:1}
+#stage{height:min(80vh,800px)}
+#lines{filter:drop-shadow(0 0 4px #2ee6ff99)}
+.core{background:radial-gradient(circle at 50% 40%,#0b3a52 0%,#041a29 65%,#020b12);box-shadow:0 0 50px #2ee6ff66,0 0 120px #2ee6ff22,inset 0 0 40px #2ee6ff33;border:1.5px solid #2ee6ff99}
+.core::before,.core::after{content:"";position:absolute;border-radius:50%;pointer-events:none}
+.core::before{inset:-22px;border:1.5px dashed #2ee6ff77;animation:spin 22s linear infinite}
+.core::after{inset:-40px;border:1px solid #2ee6ff33;border-top-color:#2ee6ff;border-bottom-color:#2ee6ff;animation:spin 9s linear infinite reverse}
+@keyframes spin{to{transform:rotate(360deg)}}
+.core .lg{max-width:138px;max-height:60px;filter:drop-shadow(0 0 8px #2ee6ffaa)}
+.core .wm{text-shadow:0 0 10px #2ee6ff}
+.core .ring{display:none}
+.core .pc{color:#9ff3ff;letter-spacing:.12em;text-transform:uppercase;font-size:10.5px;margin-top:10px}
+.main{border-radius:6px;background:linear-gradient(160deg,color-mix(in srgb,var(--c) 38%,#031724),#031724 85%);border:1px solid var(--c);box-shadow:0 0 22px color-mix(in srgb,var(--c) 55%,transparent),inset 0 0 18px color-mix(in srgb,var(--c) 22%,transparent);text-shadow:0 0 8px #000;letter-spacing:.02em;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)}
+.main .pct{background:color-mix(in srgb,var(--c) 30%,#000);color:#fff;border-radius:3px;font-family:ui-monospace,Menlo,monospace}
+.leaf{border-radius:4px;background:#031a2acc;border:1px solid color-mix(in srgb,var(--c) 80%,#000);box-shadow:0 0 14px color-mix(in srgb,var(--c) 35%,transparent);color:#d7f3ff;clip-path:polygon(6px 0,100% 0,100% calc(100% - 6px),calc(100% - 6px) 100%,0 100%,0 6px)}
+.dot{box-shadow:0 0 0 2px #ffffff14}
+.hint{color:#4f7e92;letter-spacing:.1em}
+/* side HUD panels */
+.hud{position:absolute;top:8px;width:250px;z-index:3;display:flex;flex-direction:column;gap:12px}
+.hud.l{left:20px}.hud.r{right:20px}
+.panel{background:var(--card);border:1px solid #134a60;box-shadow:var(--shadow);padding:14px 14px 12px;position:relative;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px)}
+.panel h4{margin:0 0 10px;font-size:11px;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700}
+.brow{display:block;width:100%;text-align:left;background:none;border:0;padding:6px 0;color:var(--text)}
+.brow:hover b{color:#fff;text-shadow:0 0 8px var(--accent)}
+.brow div{display:flex;justify-content:space-between;font-size:12.5px}
+.brow b{font-weight:600}.brow span{font-family:ui-monospace,Menlo,monospace;color:var(--muted)}
+.brow .bar{height:4px;margin-top:5px;border-radius:0;background:#0b2a3a}.brow .bar i{border-radius:0;box-shadow:0 0 8px currentColor}
+.clock{font-family:ui-monospace,Menlo,monospace;font-size:30px;letter-spacing:.04em;color:#fff;text-shadow:0 0 14px var(--accent)}
+.cdate{color:var(--muted);font-size:12px;margin-top:2px}
+.dd{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:7px 0;border-top:1px solid #134a6055;font-size:12px}
+.dd:first-of-type{border-top:0}
+.dd em{font-style:normal;font-family:ui-monospace,Menlo,monospace;font-size:16px;color:#9ff3ff}.dd em.hot{color:#ff5a6e;text-shadow:0 0 8px #ff5a6e}
+.dd small{display:block;color:var(--muted);font-size:11px}
+@media (max-width:1180px){.hud{position:static;width:auto;margin:12px 16px 0}.console{display:flex;flex-direction:column}.hud.l{order:2}.hud.r{order:3}#stage{order:1}}
+@media (max-width:640px){.hud.l{display:none}}
+.item,.why,table,.mnav button,.tools span,.upc,.mcard{border-color:#134a60;box-shadow:var(--shadow)}
+.hero{box-shadow:0 0 40px color-mix(in srgb,var(--accent) 25%,transparent);border:1px solid #2ee6ff55;border-radius:10px}
+.item,.why,.mcard{border-radius:10px}
+.back{background:var(--card);color:var(--text);border:1px solid #134a60}
+.stbtn{background:#031a2a;border-color:#134a60}
+.act{border-color:var(--accent);color:var(--accent)}.act:hover{background:var(--accent);color:#012}
+.item.hl{border-color:var(--accent);box-shadow:0 0 22px #2ee6ff66}
 </style>
 </head>
 <body>
 
 <header class="top">
-  <div class="eyebrow">Command Center</div>
-  <h1>브랜드의 모든 일을 <span>한 화면</span>에서.</h1>
-  <p class="lead">끌어서 돌려보고, 가지를 누르면 상세로 들어갑니다.</p>
+  <div class="eyebrow">// Standard Roast · Command Center</div>
+  <h1>브랜드의 모든 일을 <span>한 화면</span>에서</h1>
+  <p class="lead">홀로그램을 끌어서 돌리고, 패널을 눌러 상세로 진입하세요.</p>
   <div class="toolbar">
     <button class="pill on" id="btnRot">자동 회전</button>
     <button class="pill" id="btnHome">시점 초기화</button>
@@ -124,16 +173,17 @@ td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:l
   </div>
 </header>
 
+<div class="console">
+<aside class="hud l"><div class="panel"><h4>System status</h4><div id="lpanel"></div></div></aside>
+<aside class="hud r"><div class="panel"><div class="clock" id="clock">--:--:--</div><div class="cdate" id="cdate"></div></div><div class="panel"><h4>Upcoming</h4><div id="uplist"></div></div></aside>
 <div id="stage" aria-label="Standard Roast 3D 마인드맵">
   <svg id="lines" width="100%" height="100%"></svg><div id="nodes"></div>
   <div class="hint">드래그해서 회전 · 클릭해서 열기</div>
 </div>
+</div>
 <div class="grid" id="grid"></div>
 
-<section class="up">
-  <h2>다가오는 세무·정기 일정</h2>
-  <div class="uplist" id="uplist"></div>
-</section>
+
 
 <footer>
   구상(💡) → 구축중(🔧) → 운영중(✅) 순으로 상태를 눌러 바꿉니다. 기록은 이 브라우저에만 저장됩니다.<br>
@@ -275,7 +325,7 @@ function proj(p,cx,cy,k){
   return {x:cx+x1*s*k, y:cy+y2*s*k, s:s*k, z:z2};
 }
 function render(){
-  const W=stage.clientWidth, H=stage.clientHeight, k=Math.max(.5,Math.min(1.1,W/1100,H/800)), cx=W/2, cy=H*0.48;
+  const W=stage.clientWidth, H=stage.clientHeight, k=Math.max(.5,Math.min(1.15,W/1050,H/780)), cx=W/2, cy=H*0.48;
   nodes.forEach(n=>{
     const q=proj(n.p,cx,cy,k);
     n.el.style.transform=`translate(${q.x.toFixed(1)}px,${q.y.toFixed(1)}px) translate(-50%,-50%) scale(${q.s.toFixed(3)})`;
@@ -333,10 +383,18 @@ function upcoming(){
   TAXD.forEach(t=>{ for(let y=now.getFullYear();y<=now.getFullYear()+1;y++){
     (t.m===0?[...Array(12).keys()]:[t.m-1]).forEach(mo=>{const dt=new Date(y,mo,t.d); if(dt>=now) out.push({...t,dt})}); }});
   out.sort((a,b)=>a.dt-b.dt);
-  return out.slice(0,4).map(o=>({...o,left:Math.round((o.dt-now)/864e5)}));
+  const u=new Set(); return out.filter(o=>!u.has(o.n)&&u.add(o.n)).slice(0,4).map(o=>({...o,left:Math.round((o.dt-now)/864e5)}));
 }
 function drawUp(){
-  document.getElementById('uplist').innerHTML=upcoming().map(o=>`<div class="upc"><div class="d ${o.left<=7?'hot':''}">D-${o.left}</div><b>${o.n}</b><br><span>${o.dt.getMonth()+1}월 ${o.dt.getDate()}일 · ${o.note}</span></div>`).join('');
+  document.getElementById('uplist').innerHTML=upcoming().map(o=>`<div class="dd"><div>${o.n}<small>${o.dt.getMonth()+1}/${o.dt.getDate()}</small></div><em class="${o.left<=7?'hot':''}">D-${o.left}</em></div>`).join('');
+  const t=()=>{const d=new Date();document.getElementById('clock').textContent=d.toTimeString().slice(0,8);document.getElementById('cdate').textContent=d.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'})};
+  t(); setInterval(t,1000);
+}
+function drawLeft(){
+  const el=document.getElementById('lpanel');
+  el.innerHTML=`<div class="brow" style="padding-top:0"><div><b>전체 가동률</b><span>${allPct()}%</span></div><div class="bar"><i style="width:${allPct()}%;background:#2dff9a;color:#2dff9a"></i></div></div>`+
+    MODS.map((m,k)=>`<button class="brow" data-k="${k}"><div><b>${m.icon} ${m.name}</b><span>${modPct(m)}%</span></div><div class="bar"><i style="width:${Math.max(3,modPct(m))}%;background:${m.color};color:${m.color}"></i></div></button>`).join('');
+  el.querySelectorAll('.brow[data-k]').forEach(b=>b.onclick=e=>openMod(+b.dataset.k,null,e));
 }
 
 /* ---------- 상세 시트 ---------- */
@@ -403,7 +461,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'){cur=(cur-1+MODS.length)%MODS.length;renderSheet(null);sheet.scrollTop=0}
 });
 
-function refresh(){ build(); drawGrid(); }
+function refresh(){ build(); drawGrid(); drawLeft(); }
 document.getElementById('btnReset').onclick=()=>{ if(confirm('모든 진행도를 초기화할까요?')){state={};save();refresh()} };
 document.getElementById('btnExport').onclick=()=>{
   const txt=MODS.map(m=>`[${m.name}] ${modPct(m)}%\n`+m.items.map((it,i)=>`  ${ST[getSt(m,i)].n} ${it.n}`).join('\n')).join('\n\n');
