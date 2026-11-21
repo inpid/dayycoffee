@@ -7,7 +7,7 @@
 <meta name="robots" content="noindex,nofollow">
 <style>
 :root{
-  --bg:#f5f6f8; --card:#ffffff; --card2:#f0f2f5; --line:#e2e5ea; --line2:#cfd4dc;
+  --bg:#ffffff; --card:#ffffff; --card2:#f5f6f8; --line:#e4e7ec; --line2:#cdd3db;
   --text:#2d3542; --muted:#6a7483; --faint:#8d96a4;
   --accent:#2f6fe0; --accent-soft:#e8f0fd; --accent-ink:#ffffff;
   --ok:#2f8f5f; --ok-soft:#e5f4ec; --warn:#b7791f; --warn-soft:#fbf1dc; --risk:#c04e4e; --risk-soft:#faeaea;
@@ -608,6 +608,21 @@ const BASE = {
    ]
   },
   {
+   "id": "web-5",
+   "legacyKey": null,
+   "areaId": "web",
+   "order": 5,
+   "grp": "배송",
+   "short": "택배·여객선",
+   "name": "택배 송장·배송 조회 · 제주 여객선 운항 확인",
+   "lv": "S",
+   "desc": "택배(CJ대한통운·우체국) 송장 배송조회와 제주 여객선 운항 여부 확인을 Claude 스킬로 처리합니다. 기존에 운영하던 자동화를 이 대시보드로 이전한 항목입니다.",
+   "how": "송장번호를 입력하면 배송 상태를 조회 / 출항 일정·운항 여부 확인",
+   "next": "자주 조회하는 송장·항로 정리",
+   "cmd": "택배 송장 배송조회해줘",
+   "link": null
+  },
+  {
    "id": "roast-0",
    "legacyKey": "roast:0",
    "areaId": "roast",
@@ -826,10 +841,34 @@ const TASK_BY_ID=Object.fromEntries(TASKS.map(t=>[t.id,t]));
 const AREA_BY_ID=Object.fromEntries(AREAS.map(a=>[a.id,a]));
 let S=null, storageOk=true;
 
+
+/* 이미 운영/구축해 둔 자동화(Claude 스킬)를 이 대시보드로 이전하기 위한 초기값.
+   사용자가 직접 수정한 적 없는 업무에만 한 번 적용됩니다. */
+const SEED_EXISTING={
+  'auto-0':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /news (스탠다드로스트 픽셀 캐릭터 도트판 카드뉴스 + 캡션 + 블로그 글)'},
+  'auto-3':{status:'live',executed:true,memo:'기존 운영 중: Claude 스킬 /w-news (매주 월요일 신문 지면 카드뉴스 + 캡션 + 블로그)'},
+  'roast-0':{status:'live',executed:true,memo:'기존 운영 중: TAAS 로스팅 프로그램. Claude 스킬 /taas — 일반 채팅에서는 수정 요청을 대기 목록에 모으고 Code에서 한 번에 반영'},
+  'roast-2':{status:'test',executed:false,memo:'TAAS 로그 기록 — 이미 쓰고 있다면 "운영 중"으로 바꾸고 실제 실행을 체크하세요'},
+  'auto-5':{status:'test',executed:false,memo:'기존 구축: Claude 스킬 /morning (아침 브리핑). 실제 사용 중이면 운영 중으로 변경'},
+  'tax-0':{status:'test',executed:false,memo:'기존 구축: 카드·영수증 내역 → 장부/세무사 전달용 CSV 정리 스킬. 실제 사용 중이면 운영 중으로 변경'},
+  'money-3':{status:'test',executed:false,memo:'기존 구축: 정부지원사업 탐색 스킬(K-Startup·기업마당·소상공인). 실제 사용 중이면 운영 중으로 변경'},
+  'money-4':{status:'test',executed:false,memo:'기존 구축: 상권 조사·경쟁사 원두 가격 비교·블로그 후기 조사 스킬. 실제 사용 중이면 운영 중으로 변경'},
+  'web-5':{status:'test',executed:false,memo:'기존 구축: 택배 배송조회(CJ대한통운·우체국)·제주 여객선 운항 확인 스킬. 실제 사용 중이면 운영 중으로 변경'}
+};
+function seedTasks(st,onlyUntouched){
+  let n=0;
+  Object.entries(SEED_EXISTING).forEach(([id,v])=>{
+    const o=st.tasks[id];if(!o)return;
+    if(onlyUntouched&&!(o.status==='idea'&&!o.updatedAt&&!o.memo&&!o.executed))return;
+    o.status=v.status;o.executed=v.executed;o.memo=v.memo;n++;
+  });
+  st.seedV=1;return n;
+}
 function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,updatedAt:null}}
 function blankState(){
   const tasks={};TASKS.forEach(t=>tasks[t.id]=blankTask());
-  return {app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,tasks,tax:[],history:[],integrations:Object.fromEntries(INTEGRATIONS.map(i=>[i.id,{connected:false}]))};
+  const st0={app:APP,version:VER,createdAt:nowIso(),savedAt:null,lastBackupAt:null,seedV:0,tasks,tax:[],history:[],integrations:Object.fromEntries(INTEGRATIONS.map(i=>[i.id,{connected:false}]))};
+  seedTasks(st0,false);return st0;
 }
 /* 구버전(sr-hub-v2: {"auto:0":0|1|2}) → v3 */
 function migrateLegacy(){
@@ -847,6 +886,7 @@ const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).sli
 function normalize(raw){
   const st=blankState();
   if(!raw||typeof raw!=='object')return st;
+  TASKS.forEach(t=>st.tasks[t.id]=blankTask());
   st.createdAt=typeof raw.createdAt==='string'?raw.createdAt:st.createdAt;
   st.savedAt=typeof raw.savedAt==='string'?raw.savedAt:null;
   st.lastBackupAt=typeof raw.lastBackupAt==='string'?raw.lastBackupAt:null;
@@ -862,13 +902,15 @@ function normalize(raw){
   });
   if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true}));
   if(Array.isArray(raw.history))st.history=raw.history.filter(h=>h&&typeof h==='object'&&typeof h.t==='string').slice(-600);
+  if(raw.seedV!==1){const n=seedTasks(st,true);if(n)st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`기존에 운영·구축해 둔 자동화 ${n}건(TAAS, 카드뉴스 등)을 이전했습니다. 상태는 직접 확인해 조정하세요.`})}
+  st.seedV=1;
   if(raw.integrations&&typeof raw.integrations==='object')INTEGRATIONS.forEach(i=>{if(raw.integrations[i.id])st.integrations[i.id]={connected:false}}); // 이번 버전은 연동 미구현 → 항상 미연결
   return st;
 }
 function load(){
   let raw=null;
   try{raw=localStorage.getItem(KEY)}catch(e){storageOk=false}
-  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){S=normalize(o);return}}catch(e){}}
+  if(raw){try{const o=JSON.parse(raw);if(o&&o.version<=VER){S=normalize(o);if(o.seedV!==1)save();return}}catch(e){}}
   const mig=migrateLegacy();
   S=mig||blankState();
   if(mig)save();
@@ -999,7 +1041,7 @@ function renderNav(){
   AREAS.forEach(a=>{const s=stats(allTasks().filter(t=>t.areaId===a.id));
     h+=`<button class="nb" data-go="area/${a.id}" ${cur==='area:'+a.id?'aria-current="page"':''} style="--c:${AREA_COLOR[a.id]}"><i class="d"></i><span>${esc(a.name)}</span><span class="n">${s.pct}%</span></button>`});
   h+=`<h3>도구</h3>`+btn('tax','세무 일정','tax')+btn('data','데이터 관리','data');
-  h+=`<div class="grow"></div><button class="nb" id="themeBtn" data-act="theme"><span>${document.documentElement.dataset.theme==='dark'?'☀ 밝은 화면으로':'☾ 소프트 다크로'}</span></button>`;
+  h+=`<div class="grow"></div>`;
   const n=$('#nav');n.innerHTML=h;n.classList.toggle('on',V.navOpen);
 }
 function renderSaveChip(){const c=$('#saveChip');if(c)c.innerHTML=storageOk?`저장됨 · ${S.savedAt?fmtTime(S.savedAt):'—'}`:'⚠ 브라우저에 저장할 수 없음'}
@@ -1127,7 +1169,7 @@ function renderList(){
   const isArea=V.view==='area', a=isArea?AREA_BY_ID[V.area]:null;
   let base=allTasks();if(isArea)base=base.filter(t=>t.areaId===V.area);
   const list=applyFilters(base), st=stats(base);
-  let h=header(isArea?esc(a.name):'전체 업무',isArea?esc(a.sub):'기존 27개 업무를 한곳에서 검색·정렬·관리합니다');
+  let h=header(isArea?esc(a.name):'전체 업무',isArea?esc(a.sub):'전체 업무를 한곳에서 검색·정렬·관리합니다 (기존 27개 + 이전한 자동화)');
   if(isArea){
     h+=`<div class="card pad" style="margin-bottom:14px;border-top:3px solid ${AREA_COLOR[a.id]}"><div class="row2" style="justify-content:space-between;align-items:center"><div style="flex:1;min-width:220px"><div style="font-size:13px;color:var(--muted)">${a.why}</div><div class="tools" style="margin-top:8px;font-size:12.5px;color:var(--muted)">연결 도구(계획): ${a.tools.map(esc).join(' · ')}</div></div>
     <div style="min-width:180px"><div style="font-size:26px;font-weight:700">${st.pct}<small style="font-size:12px;font-weight:400;color:var(--muted)">% 진행 · ${st.total}개</small></div><div class="bar"><i style="width:${st.pct}%;background:${AREA_COLOR[a.id]}"></i></div></div></div></div>`;
@@ -1182,7 +1224,7 @@ function renderData(){
    <section class="card pad"><h3 style="margin:0 0 6px">JSON 백업</h3>
     <p class="note" style="margin-bottom:12px">마지막으로 JSON 백업을 <b>다운로드한 시각</b>: <b>${S.lastBackupAt?fmtFull(S.lastBackupAt):'기록 없음'}</b><br>이 값은 이 브라우저에 남은 기록일 뿐이며, 백업 파일이 지금도 어딘가에 보관되어 있다는 뜻은 아닙니다.</p>
     <div class="row2"><button class="btn pri" data-act="export">JSON 내보내기</button><button class="btn" data-act="import">JSON 가져오기</button></div>
-    <p class="res" style="margin-top:12px">내보내기에는 5개 영역·27개 업무 정보, 진행 상태, 중요도, 목표일, 실제 실행 여부, 메모, 세무 확정 일정, 변경 이력이 모두 포함됩니다.</p>
+    <p class="res" style="margin-top:12px">내보내기에는 5개 영역·전체 업무 정보, 진행 상태, 중요도, 목표일, 실제 실행 여부, 메모, 세무 확정 일정, 변경 이력이 모두 포함됩니다.</p>
     ${snap?`<div class="note" style="margin-top:8px">직전 가져오기/초기화 전 상태가 저장되어 있습니다 (${fmtFull(snap.at)}). <button class="btn sm" data-act="restoresnap" style="margin-left:6px">그 상태로 되돌리기</button></div>`:''}
    </section>
    <section class="card pad" style="margin-top:14px"><h3 style="margin:0 0 6px">저장 정보</h3>
@@ -1191,7 +1233,7 @@ function renderData(){
     <p class="res">이번 버전은 외부 서비스와 연결되어 있지 않습니다. 아래는 향후 연동을 위한 준비 항목입니다.</p>
     <table class="tbl"><tbody>${INTEGRATIONS.map(i=>`<tr><td><b>${i.name}</b><br><span style="font-size:12.5px;color:var(--muted)">${i.desc}</span></td><td><span class="tg">미연결 · 구현 예정</span></td></tr>`).join('')}</tbody></table></section>
    <section class="card pad" style="margin-top:14px;border-color:color-mix(in srgb,var(--risk) 35%,var(--line))"><h3 style="margin:0 0 6px">데이터 초기화</h3>
-    <p class="res">모든 업무의 진행 상태·메모·목표일·변경 이력·세무 확정 일정이 지워지고 5개 영역과 27개 업무의 기본 내용만 남습니다. 초기화 전 JSON 백업을 권장합니다.</p><button class="btn danger" data-act="reset">전체 데이터 초기화…</button></section>
+    <p class="res">모든 업무의 진행 상태·메모·목표일·변경 이력·세무 확정 일정이 지워지고 5개 영역과 전체 업무의 기본 내용만 남습니다. 초기화 전 JSON 백업을 권장합니다.</p><button class="btn danger" data-act="reset">전체 데이터 초기화…</button></section>
   </div>
   <section><h2 style="font-size:17px;margin:0 0 10px">변경 이력 <small style="font-size:12.5px;font-weight:400;color:var(--muted)">최근 ${hist.length}건</small></h2>
    <div class="row2" style="margin-bottom:10px"><button class="btn" data-act="undo" ${undoable()?'':'disabled'}>↩ 최근 변경 실행 취소</button></div>
@@ -1331,7 +1373,7 @@ function importFlow(file){
 function doImport(mode){
   const v=window.__imp;if(!v)return;
   snapshot();
-  const incoming=normalize({tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),tax:v.doc.taxConfirmed,history:v.doc.history});
+  const incoming=normalize({tasks:Object.fromEntries(Object.entries(v.tasks).map(([k,r])=>[k,{...blankTask(),...Object.fromEntries(Object.entries(r).filter(([,x])=>x!==undefined))}])),tax:v.doc.taxConfirmed,history:v.doc.history,seedV:1});
   if(mode==='replace'){
     const keep={lastBackupAt:S.lastBackupAt,createdAt:S.createdAt};
     const nt=blankState();
@@ -1356,7 +1398,7 @@ function restoreSnap(){
   save();renderAll();toast('되돌렸습니다');
 }
 function resetFlow(){
-  showDlg(`<h3>전체 데이터 초기화</h3><p>모든 업무의 상태·중요도·목표일·실제 실행 여부·메모·세무 확정 일정·변경 이력이 삭제됩니다. 5개 영역과 27개 업무의 기본 내용은 유지됩니다.</p>
+  showDlg(`<h3>전체 데이터 초기화</h3><p>모든 업무의 상태·중요도·목표일·실제 실행 여부·메모·세무 확정 일정·변경 이력이 삭제됩니다. 5개 영역과 전체 업무의 기본 내용은 유지됩니다.</p>
    <p><b>먼저 JSON 백업을 받아두는 것을 강력히 권장합니다.</b></p>
    <div class="row2" style="margin-bottom:10px"><button class="btn" data-act="export">지금 JSON 백업하기</button></div>
    <label class="ck" style="align-items:flex-start"><input type="checkbox" id="rs1" style="margin-top:3px"> <span>데이터가 삭제된다는 것을 이해했고, 필요한 백업을 마쳤습니다.</span></label>
@@ -1470,7 +1512,6 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden)flushTyping
 /* =====================================================================
    시작
    ===================================================================== */
-try{const th=localStorage.getItem(THEME_KEY);if(th==='dark'||th==='light')document.documentElement.dataset.theme=th}catch(e){}
 load();parseHash();renderAll();
 </script>
 </body>
