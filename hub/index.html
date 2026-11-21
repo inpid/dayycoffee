@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Standard Roast · 커맨드 센터</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#c1622d">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="robots" content="noindex,nofollow">
 <style>
 :root{
@@ -97,6 +102,10 @@ footer{max-width:1240px;margin:44px auto;padding:0 24px;color:var(--muted);font-
 table{width:100%;border-collapse:collapse;font-size:14px;background:var(--card);border-radius:18px;overflow:hidden;border:1px solid var(--line)}
 td,th{padding:12px 14px;text-align:left;border-bottom:1px solid var(--line)}tr:last-child td{border:0}th{color:var(--muted);font-size:12px}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important}}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.act{border:1px solid var(--accent);color:var(--accent);background:transparent;border-radius:980px;padding:6px 13px;font-size:12.5px;font-weight:600;text-decoration:none;display:inline-flex;gap:6px;align-items:center}
+.act em{font-style:normal;opacity:.7;font-weight:400}
+.act:hover{background:var(--accent);color:#fff}
 </style>
 </head>
 <body>
@@ -136,8 +145,8 @@ const MODS = [
    sub:'반복 업무를 연결하고, 매일 아침 한 장짜리 브리핑으로 받아봅니다.',
    tools:['Zapier','Make','Google Calendar','Google Drive','Claude'],
    items:[
-    {s:'일일 브리핑', n:'일일 브리핑', lv:'A', d:'매출·주문·일정·할 일을 매일 아침 한 장으로 요약해 받기.', how:'캘린더 + 스토어 주문 + 시트 → Claude 요약 → 카톡/메일', next:'받고 싶은 항목 5개 정하기'},
-    {s:'주문 알림', n:'주문·문의 알림', lv:'A', d:'스토어 주문, DM, 문의 폼이 들어오면 한 곳으로 모읍니다.', how:'Zapier: 새 주문 → 시트 기록 + 알림', next:'주문이 들어오는 채널 목록 정리'},
+    {s:'일일 브리핑', n:'일일 브리핑', lv:'A', d:'매출·주문·일정·할 일을 매일 아침 한 장으로 요약해 받기.', how:'캘린더 + 스토어 주문 + 시트 → Claude 요약 → 카톡/메일', next:'받고 싶은 항목 5개 정하기', cmd:"/morning"},
+    {s:'주문 알림', n:'주문·문의 알림', lv:'A', d:'스토어 주문, DM, 문의 폼이 들어오면 한 곳으로 모읍니다.', how:'Zapier: 새 주문 → 시트 기록 + 알림', next:'주문이 들어오는 채널 목록 정리', link:["Zapier", "https://zapier.com/app/zaps"]},
     {s:'스케줄러', n:'반복업무 스케줄러', lv:'S', d:'주간/월간 루틴을 캘린더에 심고 자동 리마인드.', how:'Google Calendar 반복 일정 + 체크리스트 링크', next:'주간 루틴 10개 적기'},
     {s:'자료 정리', n:'자료·영수증 자동 정리', lv:'S', d:'사진/PDF를 올리면 날짜·종류별 폴더로 분류.', how:'Drive 폴더 감시 → 이름 규칙 → 시트에 기록', next:'폴더 구조 확정'},
     {s:'AI 비서', n:'Claude 비서 루틴', lv:'S', d:'자주 하는 요청을 스킬/프롬프트로 저장해 버튼처럼 사용.', how:'스킬(news, taas 등) + 반복 프롬프트 모음', next:'자주 쓰는 요청 Top5 저장'},
@@ -147,9 +156,9 @@ const MODS = [
    tools:['Claude (/news)','Canva','Instagram','네이버 블로그'],
    items:[
     {s:'주제 수집', n:'주제 수집·큐레이션', lv:'S', d:'커피·제주·트렌드 뉴스에서 이번 주 소재를 모읍니다.', how:'뉴스/검색 → 후보 10개 → 1개 선택', next:'소재 보관함(시트) 만들기'},
-    {s:'카드 제작', n:'카드뉴스 제작', lv:'A', d:'/news 주제 입력 → 카드 6~8장 문구 + 디자인 생성.', how:'Claude 스킬 → Canva 템플릿에 자동 채움', next:'브랜드 템플릿 1종 고정'},
+    {s:'카드 제작', n:'카드뉴스 제작', lv:'A', d:'/news 주제 입력 → 카드 6~8장 문구 + 디자인 생성.', how:'Claude 스킬 → Canva 템플릿에 자동 채움', next:'브랜드 템플릿 1종 고정', cmd:"/news 주제", link:["Canva", "https://www.canva.com"]},
     {s:'캡션·블로그', n:'캡션 + 블로그 글', lv:'A', d:'같은 주제로 인스타 캡션, 해시태그, 블로그 본문을 함께 생성.', how:'카드 결과 → 캡션/블로그 변환 프롬프트', next:'해시태그 세트 3종'},
-    {s:'주간 신문', n:'THE STANDARD 주간지', lv:'S', d:'매주 월요일 신문 지면 형식 카드뉴스.', how:'/w-news → 월요일 오전 예약 발행', next:'월요일 발행 루틴 캘린더 등록'},
+    {s:'주간 신문', n:'THE STANDARD 주간지', lv:'S', d:'매주 월요일 신문 지면 형식 카드뉴스.', how:'/w-news → 월요일 오전 예약 발행', next:'월요일 발행 루틴 캘린더 등록', cmd:"/w-news"},
     {s:'성과 복기', n:'성과 복기', lv:'S', d:'저장·공유·도달을 보고 다음 주제에 반영.', how:'인사이트 → 시트 → 월간 요약', next:'기록할 지표 3개 정하기'},
    ]},
  { id:'reels', icon:'🎬', name:'릴스·숏폼', color:'#ff375f',
@@ -159,7 +168,7 @@ const MODS = [
     {s:'콘셉트 뱅크', n:'콘셉트·훅 뱅크', lv:'S', d:'로스팅 ASMR, 바 뒷모습, 생두→원두 변신 등 반복 가능한 포맷 모음.', how:'시트에 포맷 20개 → 주 3개 선택', next:'포맷 10개 먼저 적기'},
     {s:'촬영 계획', n:'촬영 캘린더', lv:'S', d:'로스팅 날 하루에 몰아 찍는 배치 촬영.', how:'로스팅 일정 + 촬영 체크리스트', next:'월 1회 배치 촬영일 정하기'},
     {s:'자막·편집', n:'자막·편집 템플릿', lv:'S', d:'자동 자막 + 브랜드 폰트/컬러 템플릿.', how:'CapCut 자동캡션 → 템플릿 적용', next:'오프닝/엔딩 템플릿 1개'},
-    {s:'예약 업로드', n:'예약 업로드', lv:'A', d:'요일·시간 고정 발행, 캡션·해시태그 자동 삽입.', how:'Meta 예약발행 / 외부 스케줄러', next:'최적 시간대 2주 테스트'},
+    {s:'예약 업로드', n:'예약 업로드', lv:'A', d:'요일·시간 고정 발행, 캡션·해시태그 자동 삽입.', how:'Meta 예약발행 / 외부 스케줄러', next:'최적 시간대 2주 테스트', link:["Meta Business Suite", "https://business.facebook.com"]},
     {s:'트렌드 사운드', n:'트렌드 레이더', lv:'S', d:'뜨는 음원·포맷을 주 1회 점검해 브랜드 톤으로 변형.', how:'주 1회 탐색 + 저장 폴더', next:'탐색 요일 고정'},
    ]},
  { id:'sns', icon:'📸', name:'인스타·SNS', color:'#bf5af2',
@@ -167,19 +176,19 @@ const MODS = [
    tools:['Instagram','Meta Business','ManyChat','네이버 플레이스','카카오 채널'],
    items:[
     {s:'DM 자동응답', n:'DM 자동응답', lv:'A', d:'영업시간, 위치, 원두 문의에 키워드로 자동 답변.', how:'ManyChat 등 키워드 트리거 → 안내 → 사람 연결', next:'FAQ 10개 작성'},
-    {s:'예약 발행', n:'게시물 예약 발행', lv:'A', d:'피드·릴스·스토리 한 주치를 미리 예약.', how:'Meta Business Suite 예약', next:'주간 발행표 확정'},
+    {s:'예약 발행', n:'게시물 예약 발행', lv:'A', d:'피드·릴스·스토리 한 주치를 미리 예약.', how:'Meta Business Suite 예약', next:'주간 발행표 확정', link:["Meta Business Suite", "https://business.facebook.com"]},
     {s:'후기 수집', n:'후기·UGC 수집', lv:'S', d:'고객 태그/리뷰를 모아 재게시(허락 후).', how:'태그 알림 → 보관함 → 스토리 공유', next:'후기 요청 문구 만들기'},
     {s:'인사이트', n:'주간 인사이트 리포트', lv:'A', d:'팔로워·도달·저장 지표를 매주 자동 요약.', how:'인사이트 → 시트 → Claude 요약', next:'기준 지표 정하기'},
-    {s:'지역 노출', n:'네이버/지도 노출', lv:'S', d:'플레이스 사진·소식·리뷰 답글 관리.', how:'주 1회 루틴 + 답글 템플릿', next:'답글 템플릿 5종'},
+    {s:'지역 노출', n:'네이버/지도 노출', lv:'S', d:'플레이스 사진·소식·리뷰 답글 관리.', how:'주 1회 루틴 + 답글 템플릿', next:'답글 템플릿 5종', link:["네이버 스마트플레이스", "https://new.smartplace.naver.com"]},
    ]},
  { id:'tax', icon:'🧾', name:'세무·회계', color:'#30b0c7',
    sub:'영수증 한 번 올리면 장부로. 신고 일정은 알림으로. 세무사에겐 정리된 파일만.',
    tools:['홈택스','카드/계좌 내역 CSV','Google Sheets','세무사 전달 패키지'],
    items:[
-    {s:'매입 정리', n:'매입·영수증 정리', lv:'S', d:'카드·계좌 내역과 영수증을 월별로 장부(CSV/시트)에 정리.', how:'카드사 CSV → 계정과목 분류 → 시트', next:'계정과목 분류표 만들기'},
+    {s:'매입 정리', n:'매입·영수증 정리', lv:'S', d:'카드·계좌 내역과 영수증을 월별로 장부(CSV/시트)에 정리.', how:'카드사 CSV → 계정과목 분류 → 시트', next:'계정과목 분류표 만들기', cmd:"카드·영수증 내역을 세무사 전달용 CSV로 정리해줘"},
     {s:'매출 집계', n:'매출 집계', lv:'A', d:'카드매출·계좌입금·스토어 정산을 한 시트로 합산.', how:'채널별 정산표 → 자동 합계', next:'매출 채널 목록 정리'},
-    {s:'세금계산서', n:'전자세금계산서·현금영수증', lv:'S', d:'B2B 납품 시 발행, 기한(익월 10일) 알림.', how:'홈택스 발행 + 캘린더 알림', next:'거래처 목록 만들기'},
-    {s:'신고 일정', n:'신고·납부 달력', lv:'A', d:'부가세·종소세·원천세 등 기한 D-Day 알림.', how:'캘린더 반복 일정(아래 일정표 참고)', next:'캘린더에 일정 등록'},
+    {s:'세금계산서', n:'전자세금계산서·현금영수증', lv:'S', d:'B2B 납품 시 발행, 기한(익월 10일) 알림.', how:'홈택스 발행 + 캘린더 알림', next:'거래처 목록 만들기', link:["홈택스", "https://www.hometax.go.kr"]},
+    {s:'신고 일정', n:'신고·납부 달력', lv:'A', d:'부가세·종소세·원천세 등 기한 D-Day 알림.', how:'캘린더 반복 일정(아래 일정표 참고)', next:'캘린더에 일정 등록', link:["홈택스", "https://www.hometax.go.kr"]},
     {s:'세무사 패키지', n:'세무사 전달 패키지', lv:'A', d:'월말마다 매출·매입·증빙을 한 폴더/파일로 묶어 전달.', how:'월말 자동 압축/공유 링크', next:'전달 양식 세무사와 합의'},
     {s:'원가·손익', n:'원가·손익 대시보드', lv:'S', d:'원두 원가, 인건비, 임대료로 월 손익 확인.', how:'시트 수식 + 월 요약', next:'고정비 항목 입력'},
    ],
@@ -188,8 +197,8 @@ const MODS = [
    sub:'소개 페이지, 원두 판매, 블로그를 자동으로 갱신되는 하나의 시스템으로.',
    tools:['GitHub Pages','네이버 스마트스토어','Google Forms','Search Console'],
    items:[
-    {s:'브랜드 사이트', n:'브랜드 사이트', lv:'S', d:'현재 저장소의 중문로스터리 페이지를 브랜드 허브로 확장.', how:'index.html 개선 + 배포 자동화', next:'메뉴/원두 정보 최신화'},
-    {s:'온라인 스토어', n:'원두 스토어', lv:'A', d:'원두·드립백 판매, 재고와 주문 자동 연동.', how:'스마트스토어/자체몰 → 주문 시트', next:'판매 상품 5개 확정'},
+    {s:'브랜드 사이트', n:'브랜드 사이트', lv:'S', d:'현재 저장소의 중문로스터리 페이지를 브랜드 허브로 확장.', how:'index.html 개선 + 배포 자동화', next:'메뉴/원두 정보 최신화', link:["현재 사이트", "../index.html"]},
+    {s:'온라인 스토어', n:'원두 스토어', lv:'A', d:'원두·드립백 판매, 재고와 주문 자동 연동.', how:'스마트스토어/자체몰 → 주문 시트', next:'판매 상품 5개 확정', link:["스마트스토어 센터", "https://sell.smartstore.naver.com"]},
     {s:'블로그·SEO', n:'블로그·SEO 자동 포스팅', lv:'A', d:'카드뉴스 글을 블로그/사이트에 자동 게시, 검색 노출 관리.', how:'카드뉴스 본문 → 게시 → 사이트맵 갱신', next:'키워드 20개 선정'},
     {s:'문의·예약', n:'문의·예약·클래스 폼', lv:'A', d:'체험/납품/문의 폼이 시트와 알림으로 연결.', how:'Form → 시트 → 알림 + 자동 답장', next:'폼 항목 정하기'},
     {s:'지도·후기', n:'지도·후기 연동', lv:'S', d:'네이버·카카오·구글 지도 정보 일치 및 후기 모으기.', how:'정보 통일표 + 월 점검', next:'영업시간/주소 통일'},
@@ -198,7 +207,7 @@ const MODS = [
    sub:'TAAS 로스팅 프로그램과 생두 재고, 로스팅 기록, 발주를 연결합니다.',
    tools:['TAAS','Google Sheets','생두 거래처'],
    items:[
-    {s:'TAAS', n:'TAAS 로스팅 프로그램', lv:'S', d:'로스팅 기록·프로파일·배치를 관리하는 내부 프로그램.', how:'/taas 스킬로 수정 요청 누적 → 일괄 반영', next:'대기 중인 수정 요청 정리'},
+    {s:'TAAS', n:'TAAS 로스팅 프로그램', lv:'S', d:'로스팅 기록·프로파일·배치를 관리하는 내부 프로그램.', how:'/taas 스킬로 수정 요청 누적 → 일괄 반영', next:'대기 중인 수정 요청 정리', cmd:"/taas"},
     {s:'생두 재고', n:'생두 재고·발주', lv:'A', d:'재고가 기준 이하면 발주 알림.', how:'재고 시트 + 임계값 알림', next:'생두 목록과 안전재고 입력'},
     {s:'로스팅 로그', n:'로스팅 로그', lv:'S', d:'배치·온도·시간·손실률을 기록하고 맛 메모와 연결.', how:'TAAS 기록 → 시트 내보내기', next:'필수 기록 항목 확정'},
     {s:'원가 계산', n:'원두 원가 계산', lv:'A', d:'생두 단가·손실률·포장재로 g당 원가와 마진 계산.', how:'시트 수식', next:'포장재 단가 입력'},
@@ -212,13 +221,13 @@ const MODS = [
     {s:'B2B 납품', n:'B2B·도매 납품', lv:'S', d:'카페·사무실·숙소 대상 원두 납품 제안서와 견적 자동화.', how:'제안서 템플릿 + 견적 시트', next:'제안서 1페이지 만들기'},
     {s:'클래스', n:'체험·클래스', lv:'S', d:'로스팅 체험, 핸드드립 클래스 예약 판매.', how:'예약 폼 + 결제 + 안내 자동 발송', next:'1회차 커리큘럼'},
     {s:'굿즈·드립백', n:'굿즈·드립백', lv:'S', d:'픽셀 캐릭터 IP로 스티커·드립백·굿즈 확장.', how:'캐릭터 시안 → 소량 제작 테스트', next:'캐릭터 굿즈 3종 시안'},
-    {s:'지원사업', n:'정부지원사업', lv:'S', d:'소상공인·창업 지원사업 공고를 정기 탐색.', how:'K-Startup/기업마당 주 1회 점검', next:'조건 맞는 공고 5건 저장'},
+    {s:'지원사업', n:'정부지원사업', lv:'S', d:'소상공인·창업 지원사업 공고를 정기 탐색.', how:'K-Startup/기업마당 주 1회 점검', next:'조건 맞는 공고 5건 저장', cmd:"커피 로스팅·소상공인 지원사업 공고 찾아줘", link:["K-Startup", "https://www.k-startup.go.kr"]},
    ]},
  { id:'future', icon:'🔭', name:'트렌드·미래', color:'#ff6482',
    sub:'브랜드 스토리, AI 도입, 시장 변화를 읽고 다음 한 수를 준비합니다.',
    tools:['Claude','시장 조사','네이버 데이터랩'],
    items:[
-    {s:'시장 레이더', n:'시장·트렌드 레이더', lv:'S', d:'커피 트렌드·경쟁사 가격·상권 변화를 월 1회 점검.', how:'검색/쇼핑 데이터 요약 리포트', next:'경쟁사 5곳 리스트'},
+    {s:'시장 레이더', n:'시장·트렌드 레이더', lv:'S', d:'커피 트렌드·경쟁사 가격·상권 변화를 월 1회 점검.', how:'검색/쇼핑 데이터 요약 리포트', next:'경쟁사 5곳 리스트', cmd:"경쟁사 원두 가격 비교와 상권 조사해줘"},
     {s:'브랜드 IP', n:'브랜드 스토리·캐릭터', lv:'M', d:'스탠다드 로스트만의 세계관과 픽셀 캐릭터를 일관되게.', how:'브랜드 가이드 1장', next:'브랜드 한 줄 정의'},
     {s:'AI 에이전트', n:'AI 에이전트 확대', lv:'S', d:'반복 업무를 에이전트가 처리하고 사람은 승인만.', how:'스킬 → 예약 실행 → 승인 알림', next:'승인형 자동화 1개 시작'},
     {s:'데이터 축적', n:'데이터 자산화', lv:'S', d:'고객·매출·콘텐츠 성과를 쌓아 의사결정 기반으로.', how:'시트 → 월간 대시보드', next:'핵심 지표 5개 정하기'},
@@ -356,6 +365,7 @@ function renderSheet(hl){
     const s=getSt(m,i);
     h+=`<div class="item ${hl===i?'hl':''}"><div class="row"><h3>${it.n}</h3><span class="badge">${LV[it.lv]}</span></div>
       <p>${it.d}</p><p><span class="k">어떻게</span>${it.how}</p><p><span class="k">다음 할 일</span>${it.next}</p>
+      ${it.cmd||it.link?`<div class="acts">${it.cmd?`<button class="act cp" data-cmd="${it.cmd.replace(/"/g,'&quot;')}">⌘ ${it.cmd}<em>복사</em></button>`:''}${it.link?`<a class="act" href="${it.link[1]}" target="_blank" rel="noopener">↗ ${it.link[0]}</a>`:''}</div>`:''}
       <button class="stbtn" data-i="${i}"><span class="dot" style="background:${ST[s].c}"></span>${ST[s].n}<span style="margin-left:auto;color:var(--muted);font-weight:400">눌러서 변경</span></button></div>`;
   });
   h+='</div>';
@@ -369,6 +379,10 @@ function renderSheet(hl){
   sin.querySelector('#bk').onclick=closeSheet;
   sin.querySelector('#pv').onclick=()=>{cur=(cur-1+MODS.length)%MODS.length;renderSheet(null);sheet.scrollTop=0};
   sin.querySelector('#nx').onclick=()=>{cur=(cur+1)%MODS.length;renderSheet(null);sheet.scrollTop=0};
+  sin.querySelectorAll('.cp').forEach(b=>b.onclick=()=>{
+    const t=b.dataset.cmd, done=()=>{const e=b.querySelector('em');e.textContent='복사됨 ✓';setTimeout(()=>e.textContent='복사',1500)};
+    (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(done).catch(()=>prompt('복사해서 Claude에 붙여넣기',t));
+  });
   sin.querySelectorAll('.stbtn').forEach(b=>b.onclick=()=>{
     const i=+b.dataset.i, key=m.id+':'+i; state[key]=((state[key]||0)+1)%3; save();
     const y=sheet.scrollTop; renderSheet(i); sheet.scrollTop=y; refresh();
@@ -392,6 +406,7 @@ document.getElementById('btnExport').onclick=()=>{
   (navigator.clipboard?navigator.clipboard.writeText(txt):Promise.reject()).then(()=>alert('현황을 복사했습니다.')).catch(()=>prompt('복사해서 보관하세요',txt));
 };
 refresh(); drawUp();
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>
