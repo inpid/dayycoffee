@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>디웍스 코어 시안</title>
+<meta name="color-scheme" content="light dark">
+<style>
+:root{--font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+body[data-skin="light"]{--bg:#ffffff;--bg2:#eef4ff;--ink:#0b1b33;--mute:#5b6f93;--faint:#9fb0cc;--blue:#1f6bff;--cyan:#00b4e0;--line:rgba(31,107,255,.32);--glass:rgba(255,255,255,.82);--shadow:0 12px 44px rgba(31,107,255,.14);--cardbg:rgba(255,255,255,.9)}
+body[data-skin="dark"]{--bg:#030810;--bg2:#06182b;--ink:#e6f6ff;--mute:#7fb3cc;--faint:#3d6579;--blue:#3aa8ff;--cyan:#4de3ff;--line:rgba(77,227,255,.38);--glass:rgba(6,20,34,.72);--shadow:0 0 50px rgba(77,227,255,.16);--cardbg:rgba(6,22,38,.78)}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0;background:radial-gradient(ellipse 70% 60% at 50% 44%,var(--bg2) 0,transparent 70%);pointer-events:none}
+#orb{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:18px 24px;z-index:3}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.08em;font-size:15px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--cyan);box-shadow:0 0 10px var(--cyan);animation:pl 2.4s ease-in-out infinite}
+@keyframes pl{50%{opacity:.35}}
+.brand small{font:500 10.5px var(--mono);letter-spacing:.2em;color:var(--mute);margin-left:4px}
+.rt{display:flex;align-items:center;gap:14px;font:500 11.5px var(--mono);letter-spacing:.12em;color:var(--mute)}
+.menu{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--glass);color:var(--ink);font-size:18px;cursor:pointer}
+.skin{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:5;display:flex;gap:4px;padding:4px;border-radius:980px;border:1px solid var(--line);background:var(--glass);backdrop-filter:blur(10px)}
+.skin button{border:0;background:none;color:var(--mute);padding:7px 16px;border-radius:980px;font:600 12.5px var(--font);cursor:pointer}
+.skin button[aria-pressed="true"]{background:var(--blue);color:#fff}
+body[data-skin="dark"] .skin button[aria-pressed="true"]{color:#021018}
+.ro{position:fixed;top:50%;z-index:2;font:500 11px var(--mono);letter-spacing:.18em;color:var(--mute);line-height:2.1;transform:translateY(-50%)}
+.ro b{display:block;font-size:26px;font-weight:300;letter-spacing:.02em;color:var(--ink);line-height:1.1}
+.ro.l{left:34px}.ro.r{right:34px;text-align:right}
+.say{position:fixed;left:50%;transform:translateX(-50%);width:min(760px,90vw);text-align:center;font-size:clamp(18px,2.1vw,24px);font-weight:500;line-height:1.5;z-index:2;min-height:3em}
+.stream{position:fixed;left:34px;bottom:130px;width:280px;font:500 12.5px var(--mono);color:var(--mute);z-index:2;display:flex;flex-direction:column;gap:5px}
+.stream div{opacity:0;animation:ln .4s forwards}
+@keyframes ln{from{opacity:0;transform:translateX(-6px)}to{opacity:1}}
+.stream div.old{opacity:.4}
+.stream i{font-style:normal;color:var(--cyan)}
+.bar{position:fixed;left:50%;bottom:56px;transform:translateX(-50%);width:min(720px,92vw);height:62px;display:flex;align-items:center;gap:10px;padding:0 10px 0 22px;border:1px solid var(--line);border-radius:31px;background:var(--glass);backdrop-filter:blur(14px);box-shadow:var(--shadow);z-index:4;transition:border-color .3s,box-shadow .3s}
+.bar:focus-within{border-color:var(--blue);box-shadow:var(--shadow),0 0 0 4px color-mix(in srgb,var(--blue) 14%,transparent)}
+.bar input{flex:1;min-width:0;border:0;outline:0;background:none;color:var(--ink);font:500 18px var(--font)}
+.bar input::placeholder{color:var(--faint)}
+.tier{font:600 10.5px var(--mono);letter-spacing:.14em;color:var(--mute);border:1px solid var(--line);border-radius:6px;padding:4px 8px}
+.go{width:44px;height:44px;border-radius:50%;border:0;background:var(--blue);color:#fff;font-size:18px;cursor:pointer}
+body[data-skin="dark"] .go{color:#021018;background:var(--cyan)}
+.mic{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--mute);cursor:pointer;font-size:15px}
+.hint{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;font:500 11px var(--mono);letter-spacing:.14em;color:var(--faint);z-index:2;white-space:nowrap}
+.cards{position:fixed;inset:0;pointer-events:none;z-index:3}
+.card{position:absolute;left:0;top:0;width:214px;padding:12px 14px 13px;border:1px solid var(--line);border-radius:6px;background:var(--cardbg);backdrop-filter:blur(10px);box-shadow:var(--shadow);transition:transform .9s cubic-bezier(.16,1,.3,1),opacity .6s;pointer-events:auto;cursor:pointer}
+.card::before,.card::after{content:"";position:absolute;width:9px;height:9px;border:2px solid var(--cyan)}
+.card::before{left:-1px;top:-1px;border-right:0;border-bottom:0}.card::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.card em{display:block;font:600 9.5px var(--mono);letter-spacing:.2em;color:var(--cyan);font-style:normal;margin-bottom:5px}
+.card b{display:block;font-size:14.5px;font-weight:600;line-height:1.35}
+.card span{display:block;font-size:12px;color:var(--mute);margin-top:4px}
+.demo{position:fixed;right:24px;bottom:68px;z-index:5;border:1px solid var(--line);background:var(--glass);color:var(--ink);border-radius:980px;padding:9px 16px;font:600 12.5px var(--font);cursor:pointer}
+@media (max-width:760px){.skin{top:62px;white-space:nowrap}.skin button{padding:6px 10px;font-size:11.5px}.ro{display:none}.say{font-size:17px}.stream{left:50%;transform:translateX(-50%);bottom:132px;width:88vw;text-align:center}.demo{display:none}.card{width:170px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-skin="light">
+<canvas id="orb"></canvas>
+<div class="skin" role="group" aria-label="시안 선택"><button data-s="light" aria-pressed="true">시안 1 · 밝은 홀로그램</button><button data-s="dark" aria-pressed="false">시안 2 · 어두운 시네마틱</button></div>
+<header class="top"><div class="brand"><i class="dot"></i>디웍스<small>ONLINE</small></div><div class="rt"><span id="clock">--:--</span><button class="menu" aria-label="작업공간">≡</button></div></header>
+<div class="ro l"><b id="rTd">1</b>TODAY<br><b id="rUr">1</b>URGENT</div>
+<div class="ro r"><b id="rAc">2</b>ACTIVE<br><b id="rLv">5/7</b>LIVE</div>
+<div class="cards" id="cards"></div>
+<div class="say" id="say"></div>
+<div class="stream" id="stream" aria-live="polite"></div>
+<form class="bar" id="form" autocomplete="off"><input id="in" aria-label="명령" placeholder="무엇을 할까요?"><button type="button" class="mic" title="음성">●</button><span class="tier">FAST</span><button class="go" aria-label="실행">↵</button></form>
+<button class="demo" id="demo">▶ 예시 문장 실행</button>
+<div class="hint">시안 미리보기 · 응답은 데모(가짜)입니다</div>
+<script>
+'use strict';
+const $=s=>document.querySelector(s);
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const cv=$('#orb'),ctx=cv.getContext('2d');
+let W=0,H=0,dpr=1,cx=0,cy=0,R=100;
+const st={mode:'idle',speed:.35,glow:.55,amp:0,rot:[0,0,0,0],t:0,ripples:[],parts:[],scan:0};
+const MODE={idle:{speed:.35,glow:.55,amp:.02},typing:{speed:.8,glow:.8,amp:.06},thinking:{speed:2.4,glow:1,amp:.1},acting:{speed:1.7,glow:1.1,amp:.08},speaking:{speed:1,glow:.85,amp:.12}};
+const tgt={...MODE.idle};
+function setMode(m){st.mode=m;Object.assign(tgt,MODE[m])}
+function skin(){return document.body.dataset.skin}
+function resize(){
+  dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;
+  const narrow=W<760;cx=W/2;cy=H*(narrow?.34:.43);R=Math.min(W,H)*(narrow?.15:.17);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const q=[...document.querySelectorAll('.say')];q[0].style.top=(cy+R*1.95)+'px';
+  if(!st.parts.length)for(let i=0;i<90;i++)st.parts.push({a:Math.random()*6.283,r:1.05+Math.random()*.7,s:(.05+Math.random()*.12)*(Math.random()<.5?-1:1),z:Math.random(),sz:.7+Math.random()*1.5});
+  drawGridCache();if(reduce)frame(0);
+}
+let gridC=null;
+function drawGridCache(){
+  gridC=document.createElement('canvas');gridC.width=W*dpr;gridC.height=H*dpr;const g=gridC.getContext('2d');g.scale(dpr,dpr);
+  const L=skin()==='light';g.fillStyle=L?'rgba(31,107,255,.14)':'rgba(77,227,255,.12)';
+  for(let x=24;x<W;x+=34)for(let y=24;y<H;y+=34){const d=Math.hypot(x-cx,y-cy);if(d<R*3.6)g.fillRect(x,y,1.4,1.4)}
+}
+function col(a,k){const L=skin()==='light';return L?(k==='c'?`rgba(0,150,210,${a})`:k==='w'?`rgba(255,255,255,${a})`:`rgba(31,107,255,${a})`):(k==='c'?`rgba(77,227,255,${a})`:k==='w'?`rgba(220,250,255,${a})`:`rgba(58,168,255,${a})`)}
+let last=0;
+function frame(ts){
+  const dt=Math.min(.05,(ts-last)/1000||0);last=ts;
+  for(const k of['speed','glow','amp'])st[k]+=(tgt[k]-st[k])*Math.min(1,dt*3.2);
+  const sp=reduce?0:st.speed*dt;st.t+=dt*(reduce?0:1);
+  st.rot[0]+=sp*.25;st.rot[1]-=sp*.4;st.rot[2]+=sp*.8;st.rot[3]+=sp*.5;
+  const L=skin()==='light';
+  ctx.clearRect(0,0,W,H);
+  ctx.globalCompositeOperation='source-over';
+  if(gridC)ctx.drawImage(gridC,0,0,W,H);
+  ctx.globalCompositeOperation=L?'source-over':'lighter';
+  // glow
+  let g=ctx.createRadialGradient(cx,cy,R*.2,cx,cy,R*3.4);g.addColorStop(0,col(.34*st.glow,'b'));g.addColorStop(.45,col(.1*st.glow,'b'));g.addColorStop(1,col(0,'b'));
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  // outer tick ring
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(st.rot[0]);
+  for(let i=0;i<180;i++){const a=i/180*6.283,long=i%15===0,mid=i%5===0;const r1=R*1.62,r2=r1+(long?R*.1:mid?R*.06:R*.03);ctx.strokeStyle=col(long?.75:mid?.5:.28,'b');ctx.lineWidth=long?1.6:1;ctx.beginPath();ctx.moveTo(Math.cos(a)*r1,Math.sin(a)*r1);ctx.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);ctx.stroke()}
+  ctx.restore();
+  // dashed ring
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(st.rot[1]);ctx.setLineDash([R*.06,R*.05]);ctx.strokeStyle=col(.42,'c');ctx.lineWidth=1.2;ctx.beginPath();ctx.arc(0,0,R*1.45,0,6.283);ctx.stroke();ctx.restore();
+  // arcs
+  ctx.save();ctx.translate(cx,cy);ctx.rotate(st.rot[2]);ctx.lineCap='round';
+  const span=st.mode==='thinking'?1.7:1.05;
+  for(let i=0;i<3;i++){ctx.strokeStyle=col(.85-i*.12,i===1?'c':'b');ctx.lineWidth=3-i*.5;ctx.beginPath();ctx.arc(0,0,R*(1.22+i*.045),i*2.094,i*2.094+span*(1-i*.15));ctx.stroke()}
+  ctx.restore();
+  // waveform ring
+  ctx.save();ctx.translate(cx,cy);ctx.strokeStyle=col(.7,'c');ctx.lineWidth=1.3;ctx.beginPath();
+  for(let i=0;i<=240;i++){const a=i/240*6.283,n=Math.sin(a*7+st.t*3)*.5+Math.sin(a*13-st.t*4.3)*.35+Math.sin(a*3+st.t*1.7)*.4,r=R*1.1+R*st.amp*n;const x=Math.cos(a)*r,y=Math.sin(a)*r;i?ctx.lineTo(x,y):ctx.moveTo(x,y)}ctx.closePath();ctx.stroke();ctx.restore();
+  // globe body
+  g=ctx.createRadialGradient(cx-R*.25,cy-R*.3,R*.05,cx,cy,R);
+  if(L){g.addColorStop(0,'rgba(255,255,255,.98)');g.addColorStop(.55,'rgba(190,215,255,.5)');g.addColorStop(1,'rgba(31,107,255,.22)')}else{g.addColorStop(0,'rgba(160,240,255,.9)');g.addColorStop(.5,'rgba(40,140,220,.35)');g.addColorStop(1,'rgba(20,90,170,.12)')}
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R,0,6.283);ctx.fill();
+  ctx.strokeStyle=col(.8,'b');ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(cx,cy,R,0,6.283);ctx.stroke();
+  // meridians (spinning wire globe)
+  for(let i=0;i<7;i++){const ph=st.rot[3]+i*Math.PI/7,w=Math.abs(Math.cos(ph));ctx.strokeStyle=col(.18+.42*w,'b');ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(cx,cy,Math.max(.5,R*w),R,0,0,6.283);ctx.stroke()}
+  for(let k=-3;k<=3;k++){const lat=k*.34,y=cy+R*Math.sin(lat),w=R*Math.cos(lat);ctx.strokeStyle=col(.3,'b');ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(cx,y,w,w*.16,0,0,6.283);ctx.stroke()}
+  // core spark
+  const pulse=.6+.4*Math.sin(st.t*2.4);g=ctx.createRadialGradient(cx,cy,0,cx,cy,R*.5);g.addColorStop(0,col(.95*pulse*st.glow,'w'));g.addColorStop(.35,col(.5*st.glow,'c'));g.addColorStop(1,col(0,'c'));ctx.fillStyle=g;ctx.beginPath();ctx.arc(cx,cy,R*.5,0,6.283);ctx.fill();
+  // scan
+  if(st.mode==='thinking'||st.mode==='acting'){ctx.save();ctx.beginPath();ctx.arc(cx,cy,R,0,6.283);ctx.clip();const y=cy+Math.sin(st.t*2.2)*R*.95;const sg=ctx.createLinearGradient(0,y-R*.2,0,y+R*.2);sg.addColorStop(0,col(0,'c'));sg.addColorStop(.5,col(.7,'c'));sg.addColorStop(1,col(0,'c'));ctx.fillStyle=sg;ctx.fillRect(cx-R,y-R*.2,R*2,R*.4);ctx.restore()}
+  // particles
+  for(const p of st.parts){p.a+=p.s*sp*2.2;const r=R*p.r*(1+.04*Math.sin(st.t+p.z*9));const x=cx+Math.cos(p.a)*r,y=cy+Math.sin(p.a)*r*(.55+.45*p.z);ctx.fillStyle=col(.25+.6*p.z,p.z>.5?'c':'b');ctx.beginPath();ctx.arc(x,y,p.sz,0,6.283);ctx.fill()}
+  // ripples
+  st.ripples=st.ripples.filter(r=>r.age<1);for(const r of st.ripples){r.age+=dt*.85;const rr=R*(1.1+r.age*2.3);ctx.strokeStyle=col((1-r.age)*.6,'c');ctx.lineWidth=2*(1-r.age)+.5;ctx.beginPath();ctx.arc(cx,cy,rr,0,6.283);ctx.stroke()}
+  ctx.globalCompositeOperation='source-over';
+  if(!reduce)requestAnimationFrame(frame);
+}
+function ripple(){st.ripples.push({age:0});if(reduce)frame(0)}
+
+/* ---------- demo script (가짜 응답) ---------- */
+const $in=$('#in'),$say=$('#say'),$stream=$('#stream'),$cards=$('#cards');
+const SENT='홈페이지 오픈 준비 업무 만들고 쇼카드는 긴급으로 올려줘';
+const ph=['이번 주 할 일 정리해줘','홈페이지 오픈까지 할 일 만들어줘','쇼카드 업무 내일까지로 잡아줘','지금 뭐부터 해야 해?'];let pi=0;
+setInterval(()=>{if(!$in.value&&document.activeElement!==$in){pi=(pi+1)%ph.length;$in.placeholder=ph[pi]}},3600);
+$in.addEventListener('input',()=>setMode($in.value?'typing':'idle'));
+$in.addEventListener('blur',()=>{if(st.mode==='typing'&&!$in.value)setMode('idle')});
+const sleep=ms=>new Promise(r=>setTimeout(r,reduce?Math.min(ms,50):ms));
+function line(t){const d=document.createElement('div');d.innerHTML='<i>›</i> '+t;[...$stream.children].forEach(c=>c.classList.add('old'));$stream.append(d);while($stream.children.length>4)$stream.firstChild.remove()}
+let busy=false;
+async function type(el,t,sp=22){el.textContent='';for(const ch of t){el.textContent+=ch;if(!reduce)await sleep(sp)}}
+async function run(text){
+  if(busy)return;busy=true;$cards.innerHTML='';$stream.innerHTML='';$say.textContent='';
+  setMode('thinking');line('명령 해석');await sleep(1100);
+  line('업무 28개 확인');await sleep(700);
+  setMode('acting');ripple();line('업무 3개 생성 · 홈페이지');await sleep(650);ripple();
+  line('쇼카드 → 중요도 긴급 · 목표일 설정');await sleep(650);ripple();
+  const items=[['CREATED','홈페이지 도메인 연결','다음 행동 · 도메인 확인'],['CREATED','홈페이지 메뉴·원두 정보 입력','목표 11/28'],['CREATED','홈페이지 점검·오픈','목표 12/05'],['UPDATED','매장 원두 쇼카드','중요도 긴급 · 11/24까지']];
+  showCards(items);await sleep(900);
+  setMode('speaking');line('완료');
+  await type($say,'홈페이지 업무 3개를 만들었고, 쇼카드는 긴급으로 올려 11월 24일까지로 잡았습니다.');
+  await sleep(600);setMode('idle');busy=false;
+}
+function showCards(items){
+  const n=items.length,arc=Math.min(150,38*n),start=-90-arc/2+ (n>1?0:0),rad=R*2.55;
+  items.forEach((it,i)=>{
+    const ang=(n===1?-90:(start+arc*(i/(n-1))))*Math.PI/180,x=cx+Math.cos(ang)*rad*1.28-107,y=cy+Math.sin(ang)*rad*.8-34;
+    const c=document.createElement('div');c.className='card';c.innerHTML=`<em>${it[0]}</em><b>${it[1]}</b><span>${it[2]}</span>`;
+    c.style.transform=`translate(${cx-107}px,${cy-34}px) scale(.2)`;c.style.opacity=0;$cards.append(c);
+    requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>{c.style.transform=`translate(${x}px,${y}px) scale(1)`;c.style.opacity=1},reduce?0:i*130)));
+  });
+}
+$('#form').addEventListener('submit',e=>{e.preventDefault();const v=$in.value.trim();if(!v)return;$in.value='';run(v)});
+$('#demo').addEventListener('click',()=>{$in.value=SENT;setMode('typing');setTimeout(()=>{$in.value='';run(SENT)},reduce?0:900)});
+document.querySelectorAll('.skin button').forEach(b=>b.addEventListener('click',()=>{document.body.dataset.skin=b.dataset.s;document.querySelectorAll('.skin button').forEach(x=>x.setAttribute('aria-pressed',x===b));drawGridCache();if(reduce)frame(0)}));
+setInterval(()=>{const d=new Date();$('#clock').textContent=String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')},1000);$('#clock').textContent=(()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')})();
+addEventListener('resize',resize);
+resize();$say.textContent='';
+(async()=>{await type($say,'안녕하세요. 디웍스 준비됐습니다.');})();
+if(!reduce)requestAnimationFrame(frame);else frame(0);
+</script>
+</body>
+</html>
