@@ -162,6 +162,9 @@ details.fold>summary::-webkit-details-marker{display:none}
 .hist li{font-size:12.5px;color:var(--muted);border-left:2px solid var(--line2);padding:1px 0 1px 10px;line-height:1.5}
 .hist li b{color:var(--text);font-weight:600}
 .hist li.und{opacity:.55;text-decoration:line-through}
+.note.warn{margin:8px 0 0;background:var(--warn-soft);color:var(--text)}
+.fl .sub{color:var(--muted);opacity:.85;font-size:11px}
+.memo.pf{min-height:60px}
 .note{font-size:12.5px;color:var(--muted);background:var(--card2);border-radius:9px;padding:9px 12px;line-height:1.55}
 /* ---------- table/tax ---------- */
 .tbl{width:100%;border-collapse:collapse;font-size:13.5px}
@@ -921,7 +924,7 @@ const STATUS={
 const STATUS_ORDER=['idea','build','test','live','hold'];
 const PRIO={urgent:{l:'긴급',r:0,i:'▲'},normal:{l:'보통',r:1,i:'■'},low:{l:'낮음',r:2,i:'▽'}};
 const LV={A:'완전 자동 목표',S:'반자동 목표',M:'수동 유지'};
-const FIELD={status:'진행 상태',priority:'중요도',due:'목표 완료일',executed:'실제 실행',today:'오늘 할 일',next:'다음 행동',memo:'메모'};
+const FIELD={status:'진행 상태',priority:'중요도',due:'목표 완료일',executed:'실제 실행',today:'오늘 할 일',next:'다음 행동',memo:'메모',skill:'매뉴얼',proof:'완료 증거',checked:'마지막 검수'};
 const INTEGRATIONS=[
   {id:'sheets',name:'Google Sheets',desc:'매출·재고·장부 시트 연동'},
   {id:'calendar',name:'Google Calendar',desc:'목표일·세무 일정 캘린더 연동'},
@@ -989,7 +992,15 @@ function cleanCustom(c){
   const link=Array.isArray(c.link)&&typeof c.link[0]==='string'&&/^https?:\/\//i.test(String(c.link[1]))?[c.link[0].slice(0,60),String(c.link[1]).slice(0,500)]:null;
   return {id,areaId:c.areaId,grp:str(c.grp,60,'추가 업무')||'추가 업무',name,short:name.slice(0,20),desc:str(c.desc,2000),how:str(c.how,2000),next:str(c.next,2000,'다음 행동을 입력하세요')||'다음 행동을 입력하세요',lv:['A','S','M'].includes(c.lv)?c.lv:'S',cmd:typeof c.cmd==='string'&&c.cmd?c.cmd.slice(0,500):null,link,legacyKey:null,order:99,createdAt:typeof c.createdAt==='string'?c.createdAt:null,u:typeof c.u==='string'?c.u:null};
 }
-function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,updatedAt:null}}
+function blankTask(){return {priority:'normal',due:'',status:'idea',executed:false,today:false,memo:'',next:null,skill:'',proof:'',checked:'',updatedAt:null}}
+/* 완료 증거: 운영 중이면 무엇으로 확인했는지(링크·수치)가 있어야 한다 */
+const hasProof=t=>!!String(t.proof||'').trim();
+const needsProof=t=>t.status==='live'&&!hasProof(t);
+function proofExtra(t){
+  const urls=[...new Set((String(t.proof||'').match(/https?:\/\/[^\s<>"']+/g)||[]))].slice(0,4);
+  const links=urls.length?`<div class="row2" style="margin-top:6px">${urls.map(u=>{let h=u;try{h=new URL(u).hostname.replace(/^www\./,'')}catch(e){}return `<a class="btn sm" href="${esc(u)}" target="_blank" rel="noopener noreferrer">↗ ${esc(h)}</a>`}).join('')}</div>`:'';
+  return links+(needsProof(t)?`<p class="note warn">운영 중인데 증거가 없습니다. 링크나 수치를 한 줄 남겨 주세요.</p>`:'');
+}
 const catalogIds=st=>[...BASE_TASKS.map(t=>t.id),...st.custom.map(c=>c.id)];
 const defOf=(st,id)=>BASE_TASKS.find(t=>t.id===id)||st.custom.find(c=>c.id===id);
 function blankState(){
@@ -1040,6 +1051,9 @@ function normalize(raw){
     if(typeof r.due==='string'&&(r.due===''||isDate(r.due)))o.due=r.due;
     o.executed=r.executed===true;o.today=r.today===true;
     if(typeof r.memo==='string')o.memo=r.memo.slice(0,20000);
+    if(typeof r.skill==='string')o.skill=r.skill.slice(0,200);
+    if(typeof r.proof==='string')o.proof=r.proof.slice(0,2000);
+    if(typeof r.checked==='string'&&(r.checked===''||isDate(r.checked)))o.checked=r.checked;
     if(typeof r.next==='string'&&r.next!==d.next)o.next=r.next.slice(0,2000);
     if(typeof r.updatedAt==='string')o.updatedAt=r.updatedAt;
   });
@@ -1107,7 +1121,7 @@ function fmtVal(f,v){
   if(f==='status')return STATUS[v]?.l||v;
   if(f==='priority')return PRIO[v]?.l||v;
   if(f==='executed'||f==='today')return v?'예':'아니오';
-  if(f==='due')return v?fmtDate(v):'(없음)';
+  if(f==='due'||f==='checked')return v?fmtDate(v):'(없음)';
   return v===''||v==null?'(비어 있음)':clip(v,80);
 }
 function change(id,f,val,grp){
@@ -1415,6 +1429,12 @@ function renderDrawer(){
     <div class="hint"><span id="saved-next" class="saved" style="margin:0">자동 저장됩니다</span>${t.next!==t.nextDefault?`<button type="button" class="btn sm" data-act="nextreset">기존 문구로 되돌리기</button>`:'<span>기존 문구 그대로</span>'}</div></div>
    <fieldset class="fs"><legend>진행 상태 (${STATUS[t.status].p===null?'진행률 계산 제외':STATUS[t.status].p+'%'})</legend>${seg(STATUS_ORDER.map(k=>[k,STATUS[k].l,pie(k)]),t.status,'status')}
     <label class="ck" style="margin-top:10px"><input type="checkbox" id="f-exec" data-t="executed" ${t.executed?'checked':''}> 실제 업무에 적용해 사용 중 <span style="color:var(--muted);font-size:12.5px">(구축만 끝났다면 체크하지 말고 "테스트 중"으로 두세요)</span></label></fieldset>
+   <fieldset class="fs"><legend>매뉴얼 · 완료 증거</legend>
+    <label class="fl" for="f-skill">매뉴얼 <span class="sub">이 업무를 할 때 쓰는 스킬이나 순서</span><input class="in" id="f-skill" data-t="skill" value="${esc(t.skill)}" placeholder="${esc(t.cmd?'예: '+t.cmd:'예: /news 스킬, 체크리스트 문서')}" autocomplete="off"></label>
+    <label class="fl" for="f-proof" style="margin-top:10px">완료 증거 <span class="sub">돌아간다는 걸 보여주는 링크나 수치</span><textarea class="memo pf" id="f-proof" data-t="proof" rows="2" placeholder="예: 11/24 게시물 링크, 이번 주 3건 발행">${esc(t.proof)}</textarea></label>
+    <div id="proofX">${proofExtra(t)}</div>
+    <div class="kv" style="margin-top:10px"><label class="fl" for="f-checked">마지막 검수<input class="in" type="date" id="f-checked" data-t="checked" value="${esc(t.checked)}"></label>
+     <div class="fl">&nbsp;<button type="button" class="btn" data-act="checknow" ${t.checked===todayStr()?'disabled':''}>${t.checked===todayStr()?'오늘 검수함':'오늘 검수했어요'}</button></div></div></fieldset>
    <fieldset class="fs"><legend>중요도 · 일정</legend>${seg([['urgent','긴급','▲'],['normal','보통','■'],['low','낮음','▽']],t.priority,'prio')}
     <div class="kv" style="margin-top:12px"><label class="fl" for="f-due">목표 완료일<input class="in" type="date" id="f-due" data-t="due" value="${esc(t.due)}"></label>
      <div class="fl">오늘 할 일<button type="button" class="btn" data-act="today" data-id="${t.id}" aria-pressed="${t.today}" style="justify-content:flex-start">${t.today?'★ 오늘 할 일로 지정됨':'☆ 오늘 할 일로 지정'}</button></div></div>
@@ -1472,7 +1492,7 @@ function toast(msg,label,fn){
 function exportData(){
   flushTyping();
   const merged=Object.keys(TASK_BY_ID).map(id=>{const x=T(id);return {id:x.id,areaId:x.areaId,area:x.area.name,group:x.grp,name:x.name,description:x.desc,howTo:x.how,defaultNext:x.nextDefault,command:x.cmd,link:x.link,automationTarget:x.lv,
-     priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,updatedAt:x.updatedAt,deleted:!!S.deleted[id]}});
+     priority:x.priority,due:x.due,status:x.status,executed:x.executed,today:x.today,next:x.next,memo:x.memo,skill:x.skill,proof:x.proof,checked:x.checked,updatedAt:x.updatedAt,deleted:!!S.deleted[id]}});
   const doc={app:APP,version:VER,exportedAt:nowIso(),areas:AREAS.map(a=>({id:a.id,name:a.name,description:a.sub})),tasks:merged,customTasks:S.custom,deleted:S.deleted,taxConfirmed:S.tax,history:S.history,integrations:S.integrations};
   const json=JSON.stringify(doc,null,2);
   const d=new Date(),name=`dworks-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
@@ -1517,7 +1537,7 @@ function validateImport(text){
     if(r.due!==undefined&&r.due!==''&&!(typeof r.due==='string'&&isDate(r.due)))errs.push(`${r.id}: 목표일 형식 오류`);
     if(r.executed!==undefined&&typeof r.executed!=='boolean')errs.push(`${r.id}: 실제 실행 값이 올바르지 않습니다.`);
     if(r.memo!==undefined&&typeof r.memo!=='string')errs.push(`${r.id}: 메모 형식 오류`);
-    tasks[r.id]={priority:r.priority,due:r.due,status:r.status,executed:r.executed,today:r.today,memo:r.memo,next:r.next,updatedAt:r.updatedAt};
+    tasks[r.id]={priority:r.priority,due:r.due,status:r.status,executed:r.executed,today:r.today,memo:r.memo,next:r.next,skill:r.skill,proof:r.proof,checked:r.checked,updatedAt:r.updatedAt};
   });
   if(kn===0)errs.push('인식 가능한 업무가 하나도 없습니다.');
   let deleted={};
@@ -1709,6 +1729,7 @@ document.addEventListener('click',e=>{
     case 'today':{const t=T(id);change(id,'today',!t.today);renderAll();break}
     case 'status':setStatus(V.openId,el.dataset.v).then(renderAll);break;
     case 'prio':change(V.openId,'priority',el.dataset.v);renderAll();break;
+    case 'checknow':change(V.openId,'checked',todayStr());renderAll();toast('오늘 검수한 것으로 기록했습니다');break;
     case 'duenone':change(V.openId,'due','');renderAll();break;
     case 'nextreset':{flushTyping();change(V.openId,'next',TASK_BY_ID[V.openId].next);renderAll();break}
     case 'closed':closeTask();break;
@@ -1749,10 +1770,11 @@ document.addEventListener('submit',e=>{
 document.addEventListener('input',e=>{
   const el=e.target;
   if(el.dataset.f==='q'){V.q=el.value;renderAll();return}
-  if(el.dataset.t==='next'||el.dataset.t==='memo'){
+  if(['next','memo','skill','proof'].includes(el.dataset.t)){
     typing(V.openId,el.dataset.t,el.value);
     const s=$('#saved-'+el.dataset.t);if(s)s.textContent='저장 중…';
     const u=$('#upd');if(u)u.textContent=fmtFull(S.tasks[V.openId].updatedAt);
+    if(el.dataset.t==='proof'){const x=$('#proofX');if(x)x.innerHTML=proofExtra(T(V.openId))}
   }
   if(el.id==='rs1'||el.id==='rs2'){const ok=$('#rs1').checked&&$('#rs2').value.trim()==='초기화';$('#rsgo').disabled=!ok}
 });
@@ -1765,6 +1787,7 @@ document.addEventListener('change',e=>{
     renderAll();return;
   }
   if(el.dataset.t==='due'){change(V.openId,'due',el.value);renderAll();}
+  if(el.dataset.t==='checked'){change(V.openId,'checked',el.value);renderAll();}
   if(el.dataset.t==='executed'){setExecuted(V.openId,el.checked);renderAll()}
   if(el.id==='file'){importFlow(el.files[0])}
 });
@@ -2124,7 +2147,8 @@ const CORE_RULES=`당신은 "디웍스"의 운영 비서입니다. 사용자(딘
 3. 요청이 모호해도 되묻지 말고 합리적으로 판단해 실행합니다. 되돌릴 수 있기 때문입니다. 단, 무엇을 가리키는지 전혀 알 수 없을 때만 한 문장으로 되묻습니다.
 4. 큰 방향만 주어지면(예: "홈페이지 오픈 준비") 필요한 업무를 3~6개로 쪼개 중요도·목표일·다음 행동까지 정해 한 번에 만듭니다. 이미 있는 업무와 겹치면 새로 만들지 말고 갱신합니다.
 5. 삭제는 사용자가 지우라고 분명히 말했을 때만 deletes에 넣습니다. 시스템이 사용자에게 확인을 받습니다.
-6. 상태 "운영 중(live)"은 실제로 쓰고 있을 때만 쓰고 executed=true를 같이 줍니다. 만들어만 놓았으면 "테스트 중(test)"입니다.
+6. 상태 "운영 중(live)"은 실제로 쓰고 있을 때만 쓰고 executed=true와 proof(완료 증거: 링크나 수치)를 같이 줍니다. 증거가 없으면 시스템이 "테스트 중"으로 둡니다. 증거를 지어내지 말고, 사용자가 말한 링크·수치만 씁니다. 증거가 없으면 무엇을 남겨 달라고 한 문장으로 요청합니다. 만들어만 놓았으면 "테스트 중(test)"입니다.
+11. skill은 그 업무의 매뉴얼(예: /news 스킬)입니다. checked는 사용자가 "확인했다/검수했다"고 할 때 오늘 날짜로 넣습니다.
 7. "보여줘/알려줘"류 요청은 show_tasks로 관련 업무 카드를 띄우고 한두 문장으로 요약합니다. "대시보드/전체 목록/데이터 관리" 같은 화면 이동은 navigate를 씁니다.
 8. [현재 데이터]에 없는 사실(매출, 고객 수 등)은 지어내지 않습니다. 날짜는 YYYY-MM-DD, "오늘"은 [현재 데이터]의 오늘입니다. "내일/이번 주"는 그 기준으로 계산합니다.
 9. Google Sheets, Google Calendar, Zapier, 인스타그램 API와는 아직 연결되어 있지 않습니다. 연결된 척하지 않습니다. 세무 신고일 같은 법정 기한은 확정해 말하지 말고 홈택스·세무사 확인을 안내합니다.
@@ -2132,18 +2156,25 @@ const CORE_RULES=`당신은 "디웍스"의 운영 비서입니다. 사용자(딘
 function chatState(){
   return JSON.stringify({오늘:todayStr(),
     영역:AREAS.map(a=>({id:a.id,이름:a.name})),
-    업무:allTasks().map(t=>({id:t.id,이름:t.name,영역:t.areaId,묶음:t.grp,상태:t.status,중요도:t.priority,목표일:t.due||null,실제실행:t.executed,오늘할일:t.today,다음행동:clip(t.next,80),메모:clip(t.memo,100)})),
+    업무:allTasks().map(t=>({id:t.id,이름:t.name,영역:t.areaId,묶음:t.grp,상태:t.status,중요도:t.priority,목표일:t.due||null,실제실행:t.executed,오늘할일:t.today,다음행동:clip(t.next,80),메모:clip(t.memo,100),매뉴얼:t.skill||null,완료증거:t.proof?clip(t.proof,80):null,마지막검수:t.checked||null})),
     세무확정일정:S.tax.filter(x=>!x.done).slice(0,10).map(x=>({이름:x.name,날짜:x.date}))});
 }
 function coreTools(run){
   const areaIds=AREAS.map(a=>a.id);
   const pickArea=v=>{v=String(v||'');const hit=AREAS.find(a=>a.id===v||a.name.replace(/\s/g,'')===v.replace(/\s/g,''));if(!hit)throw new Error('알 수 없는 영역입니다. 사용 가능: '+areaIds.join(', '));return hit.id};
-  const noteOf=(before,id)=>before.map(([f])=>{const v=getVal(id,f);return f==='due'?(v?fmtShort(v)+'까지':'목표일 없음'):f==='priority'?'중요도 '+PRIO[v].l:f==='status'?STATUS[v].l:f==='next'?'다음 행동 수정':f==='memo'?'메모':f==='executed'?(v?'실제 실행':'실행 해제'):f==='today'?(v?'오늘 할 일':'오늘 해제'):''}).filter(Boolean).join(' · ');
+  const noteOf=(before,id)=>before.map(([f])=>{const v=getVal(id,f);return f==='due'?(v?fmtShort(v)+'까지':'목표일 없음'):f==='priority'?'중요도 '+PRIO[v].l:f==='status'?STATUS[v].l:f==='next'?'다음 행동 수정':f==='memo'?'메모':f==='executed'?(v?'실제 실행':'실행 해제'):f==='today'?(v?'오늘 할 일':'오늘 해제'):f==='skill'?'매뉴얼':f==='proof'?'증거 기록':f==='checked'?(v?fmtShort(v)+' 검수':'검수 해제'):''}).filter(Boolean).join(' · ');
   function doUpdate(i){
     const id=String(i.id||'');if(!TASK_BY_ID[id]||S.deleted[id])throw new Error('없는 업무 id입니다: '+id);
     const g=uid(),before=[],cur=T(id),set=(f,v)=>{const old=getVal(id,f);if(change(id,f,v,g))before.push([f,old])};
     if(typeof i.executed==='boolean')set('executed',i.executed);
-    if(i.status!==undefined){if(!STATUS[i.status])throw new Error('status 값이 올바르지 않습니다');if(i.status==='live'&&!T(id).executed)set('status','test');else set('status',i.status)}
+    if(i.skill!==undefined)set('skill',String(i.skill).slice(0,200));
+    if(i.proof!==undefined)set('proof',String(i.proof).slice(0,2000));
+    if(i.checked!==undefined){const d=String(i.checked);if(d!==''&&!isDate(d))throw new Error('checked는 YYYY-MM-DD 형식이어야 합니다');set('checked',d)}
+    let warn=null;
+    if(i.status!==undefined){if(!STATUS[i.status])throw new Error('status 값이 올바르지 않습니다');
+      if(i.status==='live'&&!T(id).executed){set('status','test');warn=`${cur.name}: 실제 실행(executed)이 없어 "테스트 중"으로 두었습니다`}
+      else if(i.status==='live'&&!hasProof(T(id))){if(cur.status!=='live')set('status','test');warn=`${cur.name}: 완료 증거(proof)가 없어 "운영 중"으로 바꾸지 않았습니다. 사용자에게 링크나 수치를 요청하세요`}
+      else set('status',i.status)}
     else if(i.executed===false&&cur.status==='live')set('status','test');
     if(i.priority!==undefined){if(!PRIO[i.priority])throw new Error('priority 값이 올바르지 않습니다');set('priority',i.priority)}
     if(i.due!==undefined){const d=String(i.due);if(d!==''&&!isDate(d))throw new Error('due는 YYYY-MM-DD 형식이어야 합니다');set('due',d)}
@@ -2151,20 +2182,21 @@ function coreTools(run){
     if(i.memo!==undefined)set('memo',String(i.memo).slice(0,5000));
     if(i.memo_append)set('memo',(T(id).memo?T(id).memo+'\n':'')+String(i.memo_append).slice(0,1000));
     if(typeof i.today==='boolean')set('today',i.today);
-    if(!before.length)return null;
+    if(!before.length)return warn?{warn}:null;
     run.undo.push(()=>before.slice().reverse().forEach(([f,v])=>change(id,f,v,uid())));
-    return {id,name:cur.name,note:noteOf(before,id),changed:[...new Set(before.map(b=>FIELD[b[0]]))]};
+    return {id,name:cur.name,note:noteOf(before,id),changed:[...new Set(before.map(b=>FIELD[b[0]]))],warn};
   }
   function doCreate(i){
     const name=String(i.name||'').trim().slice(0,120);if(!name)throw new Error('name이 비었습니다');
     const status=STATUS[i.status]?i.status:'idea';
     const id=createCustomTask({name,areaId:pickArea(i.area),grp:String(i.group||'').slice(0,60),desc:String(i.description||'').slice(0,2000),how:String(i.how||'').slice(0,2000),next:String(i.next||'').slice(0,500),status:status==='live'?'test':status,priority:i.priority,due:i.due},'Claude');
     if(!id)throw new Error('업무를 만들지 못했습니다');
+    if(i.skill){S.tasks[id].skill=String(i.skill).slice(0,200);save()}
     run.undo.push(()=>{if(S.custom.some(c=>c.id===id)&&!S.deleted[id])deleteCore(id,'Claude 되돌리기')});
     const t=T(id);return {id,name,note:[PRIO[t.priority].l!=='보통'?'중요도 '+PRIO[t.priority].l:'',t.due?fmtShort(t.due)+'까지':'',STATUS[t.status].l].filter(Boolean).join(' · ')};
   }
-  const itemSchema={type:'object',properties:{name:{type:'string'},area:{type:'string',description:'영역 id: '+areaIds.join(' | ')},group:{type:'string'},description:{type:'string'},how:{type:'string'},next:{type:'string',description:'다음 행동'},status:{type:'string',enum:['idea','build','test','live','hold']},priority:{type:'string',enum:['urgent','normal','low']},due:{type:'string',description:'YYYY-MM-DD'}},required:['name','area']};
-  const updSchema={type:'object',properties:{id:{type:'string'},status:{type:'string',enum:['idea','build','test','live','hold']},priority:{type:'string',enum:['urgent','normal','low']},due:{type:'string',description:'YYYY-MM-DD, 지우려면 빈 문자열'},next:{type:'string'},memo:{type:'string'},memo_append:{type:'string'},executed:{type:'boolean'},today:{type:'boolean'}},required:['id']};
+  const itemSchema={type:'object',properties:{name:{type:'string'},area:{type:'string',description:'영역 id: '+areaIds.join(' | ')},group:{type:'string'},description:{type:'string'},how:{type:'string'},next:{type:'string',description:'다음 행동'},status:{type:'string',enum:['idea','build','test','live','hold']},priority:{type:'string',enum:['urgent','normal','low']},due:{type:'string',description:'YYYY-MM-DD'},skill:{type:'string',description:'매뉴얼(스킬 이름이나 순서)'}},required:['name','area']};
+  const updSchema={type:'object',properties:{id:{type:'string'},status:{type:'string',enum:['idea','build','test','live','hold']},priority:{type:'string',enum:['urgent','normal','low']},due:{type:'string',description:'YYYY-MM-DD, 지우려면 빈 문자열'},next:{type:'string'},memo:{type:'string'},memo_append:{type:'string'},executed:{type:'boolean'},today:{type:'boolean'},skill:{type:'string',description:'매뉴얼(스킬 이름이나 순서)'},proof:{type:'string',description:'완료 증거: 사용자가 준 링크나 수치. 운영 중(live)으로 바꿀 때 필요'},checked:{type:'string',description:'마지막 검수일 YYYY-MM-DD'}},required:['id']};
   return [
    {name:'apply_changes',description:'업무를 한 번에 만들고(creates)·수정하고(updates)·삭제한다(deletes: 업무 id 배열). 여러 작업은 이 도구를 한 번만 호출해 모두 담는다. 삭제는 사용자 확인을 받은 뒤 실행되며 휴지통으로 가서 복원할 수 있다. 결과 요약을 돌려준다.',
     inputSchema:{type:'object',properties:{creates:{type:'array',items:itemSchema},updates:{type:'array',items:updSchema},deletes:{type:'array',items:{type:'string'}}}},
@@ -2174,7 +2206,7 @@ function coreTools(run){
       const cr=Array.isArray(inp.creates)?inp.creates.slice(0,12):[],up=Array.isArray(inp.updates)?inp.updates.slice(0,20):[],dl=Array.isArray(inp.deletes)?inp.deletes.slice(0,10).map(String):[];
       cr.forEach(c=>{try{const r=doCreate(c);res.created.push({id:r.id,name:r.name});cards.push({kind:'추가됨',id:r.id,name:r.name,note:r.note})}catch(e){res.errors.push(String(e.message))}});
       if(res.created.length)stepAdd(`업무 ${res.created.length}개 추가`);
-      up.forEach(u=>{try{const r=doUpdate(u);if(r){res.updated.push({id:r.id,name:r.name,changed:r.changed});cards.push({kind:'수정됨',id:r.id,name:r.name,note:r.note})}}catch(e){res.errors.push(String(e.message))}});
+      up.forEach(u=>{try{const r=doUpdate(u);if(r&&r.warn)res.errors.push(r.warn);if(r&&r.id){res.updated.push({id:r.id,name:r.name,changed:r.changed});cards.push({kind:'수정됨',id:r.id,name:r.name,note:r.note})}}catch(e){res.errors.push(String(e.message))}});
       if(res.updated.length){coreRipple();stepAdd(`업무 ${res.updated.length}개 수정`)}
       renderAll();coreFoot();if(cards.length){cardsShow(cards);corePulse(cards.map(c=>c.id).filter(Boolean))}
       if(dl.length){
