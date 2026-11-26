@@ -962,8 +962,10 @@ const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36).sli
 
 /* ---- 지금 실제로 하고 있는 업무만 남기는 기본 구성 (SEED_V=3) ----
    나머지 기존 업무는 삭제(휴지통)되며 "데이터 관리 → 삭제한 업무"에서 언제든 복원할 수 있습니다. */
-const SEED_V=3;
-const KEEP=new Set(['auto-0','auto-2','auto-3','web-0','roast-0','roast-2']);
+const SEED_V=4;
+/* SEED_V=4: 타스 관련 업무는 별도 프로젝트로 옮겨 디웍스에서 휴지통으로 보낸다(복원 가능) */
+const MOVED_OUT=['roast-0','roast-2'];
+const KEEP=new Set(['auto-0','auto-2','auto-3','web-0']);
 const SEED_EXISTING={
   'auto-0':{status:'live',executed:true,memo:'운영 중: 카드뉴스 (Claude 스킬 /news — 스탠다드로스트 픽셀 캐릭터 도트판 카드뉴스 + 캡션 + 블로그 글)'},
   'auto-3':{status:'live',executed:true,memo:'운영 중: 주간 뉴스 (Claude 스킬 /w-news — 매주 월요일 신문 지면 카드뉴스 + 캡션 + 블로그)'},
@@ -1060,11 +1062,16 @@ function normalize(raw){
   if(Array.isArray(raw.tax))st.tax=raw.tax.filter(x=>x&&typeof x.name==='string'&&isDate(x.date||'')).filter(x=>!st.taxDel[String(x.id||'')]).map(x=>({id:String(x.id||uid()),name:x.name.slice(0,120),date:x.date,memo:typeof x.memo==='string'?x.memo.slice(0,1000):'',done:x.done===true,u:typeof x.u==='string'?x.u:null}));
   if(Array.isArray(raw.history))st.history=raw.history.filter(h=>h&&typeof h==='object'&&typeof h.t==='string').slice(-600);
   /* 이전 버전 데이터: 실제로 하는 업무만 남기도록 한 번 정리 */
-  if(raw.seedV!==SEED_V){
+  if(!(raw.seedV>=3)){
     if(!st.custom.some(c=>c.id==='c-showcard')){st.custom.push({...cleanCustom({...SHOWCARD}),createdAt:nowIso()});st.tasks['c-showcard']=blankTask()}
     const n=seedTasks(st,true);let pr=0;
     BASE_TASKS.forEach(t=>{if(!KEEP.has(t.id)&&!st.deleted[t.id]&&!st.tasks[t.id].updatedAt){st.deleted[t.id]=nowIso();pr++}});
     st.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`지금 하고 있는 업무만 남기도록 정리했습니다(삭제 ${pr}건 · 상태 반영 ${n}건). 삭제한 업무는 "데이터 관리 → 삭제한 업무"에서 복원할 수 있습니다.`});
+  }
+  if(!(raw.seedV>=4)){
+    const now=nowIso(),moved=MOVED_OUT.filter(id=>st.tasks[id]&&!st.deleted[id]);
+    moved.forEach(id=>{st.deleted[id]=now;st.delStamp[id]=now});
+    if(moved.length)st.history.push({id:uid(),t:now,sys:true,u:false,text:`타스 관련 업무 ${moved.length}개를 별도 프로젝트로 옮겨 휴지통으로 보냈습니다. "데이터 관리 → 삭제한 업무"에서 복원할 수 있습니다.`});
   }
   st.seedV=SEED_V;
   if(raw.integrations&&typeof raw.integrations==='object')INTEGRATIONS.forEach(i=>{if(raw.integrations[i.id])st.integrations[i.id]={connected:false}});
