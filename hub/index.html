@@ -1129,11 +1129,11 @@ function undo(){
 }
 const undoable=()=>S.history.some(h=>h.u&&!h.undone);
 /* 상태 변경 규칙: 실제 실행 여부와 운영 중을 일치시킨다 */
-function setStatus(id,v){
+async function setStatus(id,v){
   const t=T(id);if(t.status===v)return;
   const g=uid();
   if(v==='live'&&!t.executed){
-    const ok=confirm('실제 업무에 적용해서 사용 중인가요?\n\n[확인] 운영 중으로 변경하고 "실제 실행"을 체크합니다.\n[취소] 아직 적용 전이므로 "테스트 중"으로 둡니다.');
+    const ok=await ask('실제 업무에 적용해서 사용 중인가요?\n\n[운영 중으로 변경] "실제 실행"도 함께 체크합니다.\n[아직 아님] 적용 전이므로 "테스트 중"으로 둡니다.','운영 중으로 변경','아직 아님');
     if(ok){change(id,'executed',true,g);change(id,'status','live',g)}
     else{change(id,'status','test',g);toast('실제 적용 전이라 "테스트 중"으로 설정했습니다')}
   }else change(id,'status',v,g);
@@ -1569,10 +1569,10 @@ function doImport(mode){
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`JSON 파일을 가져왔습니다(${mode==='replace'?'전체 교체':'병합'}, 업무 ${v.known}개).`});
   save();window.__imp=null;closeDlg();renderAll();toast('가져오기를 완료했습니다');
 }
-function restoreSnap(){
+async function restoreSnap(){
   let snap=null;try{snap=JSON.parse(localStorage.getItem(SNAP_KEY)||'null')}catch(e){}
   if(!snap||!snap.data){toast('복구할 상태가 없습니다');return}
-  if(!confirm(`${fmtFull(snap.at)} 시점의 상태로 되돌릴까요?\n현재 상태는 덮어써집니다.`))return;
+  if(!await ask(`${fmtFull(snap.at)} 시점의 상태로 되돌릴까요?\n현재 상태는 덮어써집니다.`,'되돌리기'))return;
   setState(normalize(snap.data));S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:'가져오기/초기화 이전 상태로 되돌렸습니다.'});
   try{localStorage.removeItem(SNAP_KEY)}catch(e){}
   save();renderAll();toast('되돌렸습니다');
@@ -1666,9 +1666,9 @@ function restoreTask(id,quiet){
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${TASK_BY_ID[id].name}" 복원`});
   rebuildCatalog();save();renderAll();toast('복원했습니다');
 }
-function purgeTask(id){
+async function purgeTask(id){
   const c=S.custom.find(x=>x.id===id);if(!c||!S.deleted[id])return;
-  if(!confirm(`"${c.name}" 업무를 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`))return;
+  if(!await ask(`"${c.name}" 업무를 완전히 삭제할까요?\n이 작업은 되돌릴 수 없습니다.`,'완전 삭제','취소',true))return;
   S.custom=S.custom.filter(x=>x.id!==id);delete S.tasks[id];delete S.deleted[id];delete S.delStamp[id];S.purged[id]=nowIso();
   S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`업무 "${c.name}" 완전 삭제`});
   rebuildCatalog();save();renderAll();toast('완전히 삭제했습니다');
@@ -1676,6 +1676,15 @@ function purgeTask(id){
 
 function showDlg(html){const d=$('#dlg');$('#dlgbody').innerHTML=html;if(!d.open)d.showModal()}
 function closeDlg(){const d=$('#dlg');if(d.open)d.close()}
+/* 브라우저 confirm() 대신 쓰는 확인창 — claude.ai 화면에서는 confirm()이 막혀 항상 취소로 처리될 수 있음 */
+function ask(msg,ok,no='취소',danger=false){
+  return new Promise(res=>{
+    showDlg(`<p style="white-space:pre-line;color:var(--text);font-size:15px">${esc(msg)}</p><div class="ft"><button class="btn" data-ask="0">${esc(no)}</button><button class="btn ${danger?'danger':'pri'}" data-ask="1">${esc(ok)}</button></div>`);
+    $$('[data-ask]',$('#dlgbody')).forEach(b=>b.onclick=()=>{res(b.dataset.ask==='1');closeDlg()});
+    $('#dlg').addEventListener('close',()=>res(false),{once:true});
+    setTimeout(()=>{const b=$('[data-ask="1"]',$('#dlgbody'));b&&b.focus()},30);
+  });
+}
 
 /* =====================================================================
    이벤트
@@ -1698,12 +1707,12 @@ document.addEventListener('click',e=>{
     case 'theme':{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem(THEME_KEY,n)}catch(e){}renderNav();break}
     case 'undo':undo();break;
     case 'today':{const t=T(id);change(id,'today',!t.today);renderAll();break}
-    case 'status':setStatus(V.openId,el.dataset.v);renderAll();break;
+    case 'status':setStatus(V.openId,el.dataset.v).then(renderAll);break;
     case 'prio':change(V.openId,'priority',el.dataset.v);renderAll();break;
     case 'duenone':change(V.openId,'due','');renderAll();break;
     case 'nextreset':{flushTyping();change(V.openId,'next',TASK_BY_ID[V.openId].next);renderAll();break}
     case 'closed':closeTask();break;
-    case 'copy':{const t=decodeURIComponent(el.dataset.cmd);(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('복사했습니다')).catch(()=>{prompt('복사해서 사용하세요',t)});break}
+    case 'copy':{const t=decodeURIComponent(el.dataset.cmd);(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('복사했습니다')).catch(()=>{showDlg(`<h3>직접 복사</h3><textarea class="memo" id="rawjson" readonly style="min-height:80px"></textarea><div class="ft"><button class="btn" data-act="dclose">닫기</button></div>`);const a=$('#rawjson');a.value=t;a.select()});break}
     case 'clearf':Object.assign(V,{q:'',fArea:'',fPri:'',fStat:'',fExec:'',fDue:'',hold:true,sort:'order',today:false});renderAll();break;
     case 'export':exportData();break;
     case 'import':$('#file').value='';$('#file').click();break;
@@ -1724,7 +1733,7 @@ document.addEventListener('click',e=>{
     case 'taxfromref':{const r=TAX_REF[+el.dataset.i];V.taxForm={name:r.n,date:'',memo:'',hint:`참고: 일반적으로 ${r.note}. 실제 신고일은 사업자 유형에 따라 다르므로 직접 확인한 날짜를 입력하세요.`};renderAll();$('#taxForm')&&$('#taxForm').scrollIntoView({block:'center',behavior:reduceMotion()?'auto':'smooth'});break}
     case 'taxedit':{const x=S.tax.find(z=>z.id===id);if(x){V.taxForm={...x};renderAll();$('#taxForm')&&$('#taxForm').scrollIntoView({block:'center'})}break}
     case 'taxdone':{const x=S.tax.find(z=>z.id===id);if(x){x.done=!x.done;x.u=nowIso();S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" ${x.done?'완료 처리':'완료 취소'}`});save();renderAll()}break}
-    case 'taxdel':{const x=S.tax.find(z=>z.id===id);if(x&&confirm(`"${x.name}" 일정을 삭제할까요?`)){S.tax=S.tax.filter(z=>z.id!==id);S.taxDel[id]=nowIso();S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" 삭제`});save();renderAll()}break}
+    case 'taxdel':{const x=S.tax.find(z=>z.id===id);if(x)ask(`"${x.name}" 일정을 삭제할까요?`,'삭제','취소',true).then(ok=>{if(!ok)return;S.tax=S.tax.filter(z=>z.id!==id);S.taxDel[id]=nowIso();S.history.push({id:uid(),t:nowIso(),sys:true,u:false,text:`세무 일정 "${x.name}" 삭제`});save();renderAll()});break}
   }
 });
 document.addEventListener('submit',e=>{
@@ -2000,10 +2009,10 @@ function coreLabels(h,PR){
     const el=c.alEls[i],v=c.centers[i];if(!el)return;
     const x1=v.x*cY+v.z*sY,z1=-v.x*sY+v.z*cY,y2=v.y*cP-z1*sP,z2=v.y*sP+z1*cP,x3=x1*cR-y2*sR,y3=x1*sR+y2*cR;
     const k=(1+.2*z2)*c.R*1.0,x=ox+c.side/2+c.mx.x*9+x3*k,y=oy+c.side/2+c.my.x*9+y3*k-c.R*.42;
-    const al=clamp01((z2-.05)/.5)*(c.focus&&c.focus!==a.id?.35:1);
-    el.style.transform=`translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-50%,-50%)`;el.style.opacity=al.toFixed(2);el.style.pointerEvents=al>.5?'auto':'none';
+    const al=clamp01((z2-.05)/.5)*(c.focus&&c.focus!==a.id?.35:1),hw=(el._w||90)/2+8,lx=Math.min(Math.max(x,hw),innerWidth-hw),ly=Math.max(y,84);
+    el.style.transform=`translate(${lx.toFixed(1)}px,${ly.toFixed(1)}px) translate(-50%,-50%)`;el.style.opacity=al.toFixed(2);el.style.pointerEvents=al>.5?'auto':'none';
     const cnt=c.nodes.filter(n=>n.area===a.id&&!n.dying).length;
-    const lbl=`${a.name} ${cnt}`;if(el.textContent!==lbl)el.textContent=lbl;
+    const lbl=`${a.name} ${cnt}`;if(el.textContent!==lbl){el.textContent=lbl;el._w=el.offsetWidth}
     el.classList.toggle('on',c.focus===a.id||c.hoverArea===a.id);
   });
   const tip=$('#cTip'),hn=c.hoverId&&c.nodes.find(n=>n.id===c.hoverId&&!n.dying);
@@ -2203,7 +2212,7 @@ async function coreSend(text){
   const inp=$('#cIn');
   if(!sample){saySet('이 화면에서는 Claude에 연결할 수 없습니다. claude.ai에서 연 디웍스에서 사용해 주세요.');return}
   core.busy=true;core.ctl=new AbortController();core.undo=[];
-  cardsClear();$('#cStream').innerHTML='';saySet('');$('#cGo').disabled=true;
+  cardsClear();$('#cStream').innerHTML='';saySet('');goBtn(true);
   coreMode('thinking');stepAdd('명령 해석');
   const run={undo:core.undo};
   try{
@@ -2220,10 +2229,11 @@ async function coreSend(text){
       if(code==='not_granted'||code==='sampling_disabled'||code==='not_declared')core.sample=null;
     }
   }finally{
-    core.busy=false;core.ctl=null;$('#cGo').disabled=false;coreMode('idle');
+    core.busy=false;core.ctl=null;goBtn(false);coreMode('idle');
     if(core.undo.length){const u=$('#cUndo');u.innerHTML='<button type="button" data-cundo>↩ 방금 한 일 되돌리기</button>';}
   }
 }
+function goBtn(busy){const b=$('#cGo');b.textContent=busy?'■':'↵';b.setAttribute('aria-label',busy?'중지':'실행');b.title=busy?'중지':''}
 function coreUndo(){
   const fns=core.undo.slice().reverse();core.undo=[];
   fns.forEach(f=>{try{f()}catch(e){}});
